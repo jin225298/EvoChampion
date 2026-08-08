@@ -1,0 +1,31 @@
+### model
+model_name_or_path: ""
+
+### method
+stage: sft
+do_train: true
+finetuning_type: full
+template: default
+
+### dataset
+dataset_dir: .
+dataset: identity
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: saves/current-run
+logging_steps: 10
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 5.0e-6
+num_train_epochs: 3.0
+bf16: true
+gradient_checkpointing: true
+report_to: none

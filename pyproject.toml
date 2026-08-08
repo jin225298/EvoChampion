@@ -1,0 +1,19 @@
+[project]
+name = "evochampion"
+version = "0.1.0"
+description = "LangGraph-driven model adaptation and curriculum search loop"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "datasets>=4.8.5",
+    "huggingface-hub>=1.15.0",
+    "math-verify",
+    "pydantic>=2.13.4",
+    "ray[cgraph]>=2.42.0",
+    "sympy>=1.13.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

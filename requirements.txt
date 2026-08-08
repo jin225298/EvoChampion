@@ -1,0 +1,31 @@
+# Core Dependencies
+langgraph>=0.0.40
+pydantic>=2.0.0
+typing-extensions>=4.0.0
+
+# Hugging Face Integration
+huggingface-hub>=0.20.0
+datasets>=2.14.0
+
+# Model Training (LLaMA-Factory integration)
+torch>=2.0.0
+transformers>=4.35.0
+peft>=0.7.0
+ray[cgraph]>=2.42.0
+math-verify
+sympy>=1.13.1
+
+# Utilities
+python-dotenv>=1.0.0
+loguru>=0.7.0
+rich>=13.0.0
+
+# GLiNER for classification
+gliner>=0.2.0
+
+# Optional prompt optimization
+dspy-ai>=2.4.0
+
+# Optional: API server
+fastapi>=0.104.0
+uvicorn>=0.24.0

@@ -1,0 +1,53 @@
+# Large runtime artifacts
+artifacts/
+.backup_21526/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Model cache / HF cache
+.cache/
+
+# Local agent/tooling state and one-off debug artifacts
+.claude/
+.omo/
+.sisyphus/
+.understand-anything/
+debug/
+test.py
+TODO/Todolist14.md
+
+# 本地保留、不上传/不跟踪（2026-08-06 清理）
+log/
+tmp/
+补丁和及其他/
+TODO/
+run_fallback.sh
+run_code.sh
+run_judge128.sh
+run_job_code.sh
+run_job_judge128.sh
+run_baseline_eval.sh
+baseline_train_eval.sh
+run_mathbench_eval.py
+EXPERIMENT_REPRODUCTION_CONFIG.md
+REVIEW_LOG_REMOTE_20_ROUND_ANALYSIS.md
+REPLENISHMENT_CACHE_LIFECYCLE_PLAN.md
+BASELINE_README.md
+test_filter_fix.py
+test_screening_fix.py
+test_run.sh
+test_run_job.sh
+test_mathbench_comparison.sh
