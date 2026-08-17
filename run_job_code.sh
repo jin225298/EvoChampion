@@ -78,9 +78,10 @@ else
 fi
 
 # Cluster-reachable proxy for Hugging Face / dataset search APIs on GPU nodes.
-# Overridable; defaults to the shared cluster proxy used by run_job.sh.
-export http_proxy="${http_proxy:-http://10.0.0.1:1081}"
-export https_proxy="${https_proxy:-http://10.0.0.1:1081}"
+# The login-shell proxy (127.0.0.1:1081) is only valid on the login node, so
+# force the cluster proxy here. Override with HTTP_PROXY/HTTPS_PROXY if needed.
+export http_proxy="${HTTP_PROXY_OVERRIDE:-http://11.11.11.100:1081}"
+export https_proxy="${HTTPS_PROXY_OVERRIDE:-http://11.11.11.100:1081}"
 export HTTP_PROXY="$http_proxy"
 export HTTPS_PROXY="$https_proxy"
 export PYTHONUNBUFFERED=1
