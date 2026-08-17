@@ -1,0 +1,50 @@
+[
+  {
+    "question": "Write a function add(a, b) that returns the sum of a and b.",
+    "answer": "def add(a, b):\n    return a + b",
+    "test": "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(-1, 1) == 0\n    assert candidate(0, 0) == 0\n",
+    "entry_point": "add"
+  },
+  {
+    "question": "Write a function subtract(a, b) that returns a minus b.",
+    "answer": "def subtract(a, b):\n    return a - b",
+    "test": "def check(candidate):\n    assert candidate(5, 3) == 2\n    assert candidate(0, 0) == 0\n    assert candidate(1, 1) == 0\n",
+    "entry_point": "subtract"
+  },
+  {
+    "question": "Write a function multiply(a, b) that returns the product of a and b.",
+    "answer": "def multiply(a, b):\n    return a * b",
+    "test": "def check(candidate):\n    assert candidate(2, 3) == 6\n    assert candidate(0, 5) == 0\n    assert candidate(-2, 4) == -8\n",
+    "entry_point": "multiply"
+  },
+  {
+    "question": "Write a function is_even(n) that returns True if n is even, else False.",
+    "answer": "def is_even(n):\n    return n % 2 == 0",
+    "test": "def check(candidate):\n    assert candidate(4) is True\n    assert candidate(3) is False\n    assert candidate(0) is True\n",
+    "entry_point": "is_even"
+  },
+  {
+    "question": "Write a function square(n) that returns n squared.",
+    "answer": "def square(n):\n    return n * n",
+    "test": "def check(candidate):\n    assert candidate(3) == 9\n    assert candidate(0) == 0\n    assert candidate(-2) == 4\n",
+    "entry_point": "square"
+  },
+  {
+    "question": "Write a function double(n) that returns twice n.",
+    "answer": "def double(n):\n    return 2 * n",
+    "test": "def check(candidate):\n    assert candidate(4) == 8\n    assert candidate(0) == 0\n    assert candidate(-3) == -6\n",
+    "entry_point": "double"
+  },
+  {
+    "question": "Write a function abs_val(n) that returns the absolute value of n.",
+    "answer": "def abs_val(n):\n    return abs(n)",
+    "test": "def check(candidate):\n    assert candidate(5) == 5\n    assert candidate(-5) == 5\n    assert candidate(0) == 0\n",
+    "entry_point": "abs_val"
+  },
+  {
+    "question": "Write a function max_of_two(a, b) that returns the larger of a and b.",
+    "answer": "def max_of_two(a, b):\n    return a if a > b else b",
+    "test": "def check(candidate):\n    assert candidate(3, 7) == 7\n    assert candidate(7, 3) == 7\n    assert candidate(4, 4) == 4\n",
+    "entry_point": "max_of_two"
+  }
+]

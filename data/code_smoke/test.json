@@ -1,0 +1,26 @@
+[
+  {
+    "question": "Write a function min_of_two(a, b) that returns the smaller of a and b.",
+    "answer": "def min_of_two(a, b):\n    return a if a < b else b",
+    "test": "def check(candidate):\n    assert candidate(3, 7) == 3\n    assert candidate(7, 3) == 3\n    assert candidate(4, 4) == 4\n",
+    "entry_point": "min_of_two"
+  },
+  {
+    "question": "Write a function increment(n) that returns n plus one.",
+    "answer": "def increment(n):\n    return n + 1",
+    "test": "def check(candidate):\n    assert candidate(4) == 5\n    assert candidate(0) == 1\n    assert candidate(-1) == 0\n",
+    "entry_point": "increment"
+  },
+  {
+    "question": "Write a function negate(n) that returns the negation of n.",
+    "answer": "def negate(n):\n    return -n",
+    "test": "def check(candidate):\n    assert candidate(5) == -5\n    assert candidate(-3) == 3\n    assert candidate(0) == 0\n",
+    "entry_point": "negate"
+  },
+  {
+    "question": "Write a function is_positive(n) that returns True if n > 0, else False.",
+    "answer": "def is_positive(n):\n    return n > 0",
+    "test": "def check(candidate):\n    assert candidate(5) is True\n    assert candidate(-2) is False\n    assert candidate(0) is False\n",
+    "entry_point": "is_positive"
+  }
+]
