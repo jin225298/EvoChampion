@@ -386,8 +386,8 @@ def evaluate_old_mastered_set(candidate_model_path: str, mastered_set_path: str)
     predictions = _run_eval_batch(candidate_model_path, prompts)
 
     errors = 0
-    for pred, gold in zip(predictions, gold_answers):
-        if not judge_answer(pred, gold):
+    for pred, gold, item in zip(predictions, gold_answers, eval_questions):
+        if not _judge_eval_prediction(pred, gold, item=item, allow_llm_judge=False):
             errors += 1
 
     error_rate = errors / total
@@ -432,16 +432,16 @@ def evaluate_new_skill_gain(
     # Batch inference for champion
     if champion_model_path:
         before_preds = _run_eval_batch(champion_model_path, prompts)
-        for pred, gold in zip(before_preds, gold_answers):
-            if judge_answer(pred, gold):
+        for pred, gold, item in zip(before_preds, gold_answers, eval_items):
+            if _judge_eval_prediction(pred, gold, item=item, allow_llm_judge=False):
                 before_correct += 1
             before_total += 1
 
     # Batch inference for candidate
     if candidate_model_path:
         after_preds = _run_eval_batch(candidate_model_path, prompts)
-        for pred, gold in zip(after_preds, gold_answers):
-            if judge_answer(pred, gold):
+        for pred, gold, item in zip(after_preds, gold_answers, eval_items):
+            if _judge_eval_prediction(pred, gold, item=item, allow_llm_judge=False):
                 after_correct += 1
             after_total += 1
 
@@ -1672,11 +1672,11 @@ def _run_frozen_multi_rollout(
     trace_rows = []
     for idx in range(len(frozen_prompts)):
         gold = frozen_gold[idx] if idx < len(frozen_gold) else ""
+        item = questions[idx] if questions and idx < len(questions) else {}
         chunk = predictions[idx * rollout_times:(idx + 1) * rollout_times]
-        correct_count = sum(1 for pred in chunk if judge_answer(pred, gold))
+        correct_count = sum(1 for pred in chunk if _judge_eval_prediction(pred, gold, item=item, allow_llm_judge=False))
         stats[correct_count] = stats.get(correct_count, 0) + 1
         if trace_id:
-            item = questions[idx] if questions and idx < len(questions) else {}
             difficulty = (
                 difficulties[idx]
                 if difficulties is not None and idx < len(difficulties)
@@ -1693,7 +1693,7 @@ def _run_frozen_multi_rollout(
                     prompt=frozen_prompts[idx],
                     gold_answer=gold,
                     prediction=pred,
-                    correct=judge_answer(pred, gold),
+                    correct=_judge_eval_prediction(pred, gold, item=item, allow_llm_judge=False),
                     max_new_tokens=int(EVAL_MAX_NEW_TOKENS),
                     temperature=ROLLOUT_TEMPERATURE,
                     top_p=ROLLOUT_TOP_P,

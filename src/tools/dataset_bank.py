@@ -105,6 +105,11 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         or item.get("target")
         or ""
     )
+    # Preserve code-domain test + entry_point so execution judging can run the
+    # candidate against the reference test (bank/probe rows included).
+    from src.tools.code_execution import extract_code_test_fields
+    _test_code, _entry_point, _ = extract_code_test_fields(item)
+    _has_code_test = bool(_test_code and _entry_point)
     return {
         "question_id": f"{BENCHMARK_DATASET_ID.replace('/', '_')}_{split}_{idx}",
         "question_text": question_text,
@@ -114,6 +119,10 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "target_style": "answer",
         "source_dataset_id": f"{BENCHMARK_DATASET_ID}/{split}",
         "source_dataset_row_id": str(idx),
+        "test": _test_code,
+        "entry_point": _entry_point,
+        "evaluation_method": "code_execution" if _has_code_test else "gold",
+        "needs_judge": False,
     }
 
 
