@@ -328,10 +328,7 @@ def _try_load_local_dataset(dataset_id: str, split: str, streaming: bool):
     # Single local file: load as json, expose it under the requested split.
     if os.path.isfile(dataset_id):
         try:
-            ds = load_dataset("json", data_files=dataset_id, split="train")
-            # The dataset may not have the requested split name; map "train"
-            # back to whatever split the caller asked for by re-reading.
-            return ds
+            return load_dataset("json", data_files=dataset_id, split="train", streaming=streaming)
         except Exception:
             return None
 
@@ -345,10 +342,8 @@ def _try_load_local_dataset(dataset_id: str, split: str, streaming: bool):
         if not data_files:
             return None
         try:
-            # If the requested split exists, load just that; else load all.
-            if split in data_files:
-                return load_dataset("json", data_files=data_files, split=split)
-            return load_dataset("json", data_files=data_files, split=split if split in data_files else list(data_files)[0])
+            chosen = split if split in data_files else list(data_files)[0]
+            return load_dataset("json", data_files=data_files, split=chosen, streaming=streaming)
         except Exception:
             return None
     return None
