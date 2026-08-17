@@ -92,7 +92,7 @@ export CODE_EXEC_CACHE_ENABLED="${CODE_EXEC_CACHE_ENABLED:-1}"
 # ---------------------------------------------------------------------------
 # Benchmark: local code smoke dataset (train.json / test.json)
 # ---------------------------------------------------------------------------
-export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-/home/kang/agents-evolve-formal-new/data/code_smoke}"
+export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-/data2/13641-harrier/EvoChampion/data/code_smoke}"
 export BENCHMARK_SPLIT=train
 export BENCHMARK_EVAL_SPLIT=test
 export BENCHMARK_QUESTION_KEY=question
