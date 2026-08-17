@@ -1,0 +1,50 @@
+[
+  {
+    "question": "Write a function add(a, b) that returns the sum of two numbers.",
+    "answer": "def add(a, b):\n    return a + b",
+    "test": "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(0, 0) == 0\n    assert candidate(-1, 1) == 0\n    assert candidate(100, 200) == 300",
+    "entry_point": "add"
+  },
+  {
+    "question": "Write a function multiply(a, b) that returns the product of two numbers.",
+    "answer": "def multiply(a, b):\n    return a * b",
+    "test": "def check(candidate):\n    assert candidate(2, 3) == 6\n    assert candidate(0, 5) == 0\n    assert candidate(-1, 1) == -1\n    assert candidate(7, 8) == 56",
+    "entry_point": "multiply"
+  },
+  {
+    "question": "Write a function is_even(n) that returns True if n is even, False otherwise.",
+    "answer": "def is_even(n):\n    return n % 2 == 0",
+    "test": "def check(candidate):\n    assert candidate(2) == True\n    assert candidate(3) == False\n    assert candidate(0) == True\n    assert candidate(-4) == True",
+    "entry_point": "is_even"
+  },
+  {
+    "question": "Write a function max_of_two(a, b) that returns the larger of two numbers.",
+    "answer": "def max_of_two(a, b):\n    return a if a > b else b",
+    "test": "def check(candidate):\n    assert candidate(1, 2) == 2\n    assert candidate(5, 3) == 5\n    assert candidate(0, 0) == 0\n    assert candidate(-1, -5) == -1",
+    "entry_point": "max_of_two"
+  },
+  {
+    "question": "Write a function square(n) that returns the square of a number.",
+    "answer": "def square(n):\n    return n * n",
+    "test": "def check(candidate):\n    assert candidate(2) == 4\n    assert candidate(0) == 0\n    assert candidate(-3) == 9\n    assert candidate(5) == 25",
+    "entry_point": "square"
+  },
+  {
+    "question": "Write a function reverse_string(s) that returns the reversed string.",
+    "answer": "def reverse_string(s):\n    return s[::-1]",
+    "test": "def check(candidate):\n    assert candidate('hello') == 'olleh'\n    assert candidate('') == ''\n    assert candidate('a') == 'a'\n    assert candidate('abc') == 'cba'",
+    "entry_point": "reverse_string"
+  },
+  {
+    "question": "Write a function count_vowels(s) that returns the number of vowels in a string.",
+    "answer": "def count_vowels(s):\n    return sum(1 for c in s.lower() if c in 'aeiou')",
+    "test": "def check(candidate):\n    assert candidate('hello') == 2\n    assert candidate('AEIOU') == 5\n    assert candidate('xyz') == 0\n    assert candidate('') == 0",
+    "entry_point": "count_vowels"
+  },
+  {
+    "question": "Write a function is_palindrome(s) that returns True if the string is a palindrome.",
+    "answer": "def is_palindrome(s):\n    return s == s[::-1]",
+    "test": "def check(candidate):\n    assert candidate('racecar') == True\n    assert candidate('hello') == False\n    assert candidate('') == True\n    assert candidate('a') == True",
+    "entry_point": "is_palindrome"
+  }
+]

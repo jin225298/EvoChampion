@@ -206,7 +206,8 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
     if not subject:
         from src.tools.dataset_bank import infer_module
         subject = infer_module(question_text)
-    return {
+
+    normalized = {
         "question_id": f"{safe_id}_{split}_{idx}",
         "question_text": question_text,
         "gold_answer": gold_answer,
@@ -221,6 +222,18 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "module": subject,
         "dynamic_difficulty": str(item.get("level", "")),
     }
+
+    # Code domain: include test and entry_point fields
+    from config.settings import DOMAIN
+    if DOMAIN == "code":
+        test_code = str(item.get("test", item.get("test_code", "")))
+        entry_point = str(item.get("entry_point", item.get("function_name", "")))
+        if test_code:
+            normalized["test"] = test_code
+        if entry_point:
+            normalized["entry_point"] = entry_point
+
+    return normalized
 
 
 def _build_benchmark_holdout_probe_set(dataset_id: str, subset: str, split: str) -> list[dict]:
@@ -408,11 +421,25 @@ def _evaluate_base_model_frozen(
 
     if checkpoint.get("base_frozen_error_rate") is not None:
         return float(checkpoint["base_frozen_error_rate"])
-    frozen_prompts, frozen_gold, _questions = _load_probe_items_for_eval(frozen_probe_path)
+    frozen_prompts, frozen_gold, frozen_questions = _load_probe_items_for_eval(frozen_probe_path)
     if not frozen_prompts:
         return None
     predictions = warmup_and_eval_batch(champion_model_path, frozen_prompts)
-    correct = sum(1 for p, g in zip(predictions, frozen_gold) if judge_answer(p, g))
+
+    # Code domain: use code execution judge
+    from config.settings import DOMAIN
+    if DOMAIN == "code":
+        from src.tools.code_execution import judge_code_from_prediction
+        correct = 0
+        for pred, q in zip(predictions, frozen_questions):
+            test_code = str(q.get("test", "") or "")
+            entry_point = str(q.get("entry_point", "") or "")
+            if test_code and entry_point:
+                result = judge_code_from_prediction(pred, test_code, entry_point)
+                if result.correct:
+                    correct += 1
+    else:
+        correct = sum(1 for p, g in zip(predictions, frozen_gold) if judge_answer(p, g))
     error_rate = 1.0 - correct / len(frozen_gold) if frozen_gold else None
     print(f"[bootstrap] Base model frozen probe 1-shot: {correct}/{len(frozen_gold)} correct, error_rate={error_rate:.4f}")
 

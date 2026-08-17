@@ -1,0 +1,26 @@
+[
+  {
+    "question": "Write a function subtract(a, b) that returns a minus b.",
+    "answer": "def subtract(a, b):\n    return a - b",
+    "test": "def check(candidate):\n    assert candidate(5, 3) == 2\n    assert candidate(0, 0) == 0\n    assert candidate(10, 20) == -10\n    assert candidate(100, 1) == 99",
+    "entry_point": "subtract"
+  },
+  {
+    "question": "Write a function absolute_value(n) that returns the absolute value of n.",
+    "answer": "def absolute_value(n):\n    return n if n >= 0 else -n",
+    "test": "def check(candidate):\n    assert candidate(5) == 5\n    assert candidate(-3) == 3\n    assert candidate(0) == 0\n    assert candidate(-100) == 100",
+    "entry_point": "absolute_value"
+  },
+  {
+    "question": "Write a function string_length(s) that returns the length of a string.",
+    "answer": "def string_length(s):\n    return len(s)",
+    "test": "def check(candidate):\n    assert candidate('hello') == 5\n    assert candidate('') == 0\n    assert candidate('a') == 1\n    assert candidate('test string') == 11",
+    "entry_point": "string_length"
+  },
+  {
+    "question": "Write a function list_sum(lst) that returns the sum of all elements in a list.",
+    "answer": "def list_sum(lst):\n    return sum(lst)",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 6\n    assert candidate([]) == 0\n    assert candidate([10]) == 10\n    assert candidate([-1, 1, -2, 2]) == 0",
+    "entry_point": "list_sum"
+  }
+]

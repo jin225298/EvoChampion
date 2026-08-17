@@ -666,6 +666,213 @@ Evaluator 是结果信号；loss/LR 只用于诊断训练机制。loss 下降但
 - warmup_ratio 与 warmup_steps 不要同时主动输出；优先输出 warmup_mode + warmup_value。
 """
 
+# =============================================================================
+# Code Domain Prompts — activated when DOMAIN=code
+# =============================================================================
+# Principles:
+#   - Code problems only search for data WITH tests
+#   - Reviewer only accepts "problem + reference code + test + entry_point"
+#   - Difficulty is defined ONLY by test execution results
+#   - Evaluator gives 0/1 based on execution, never subjective judgment
+#   - Small data prioritizes LoRA
+# =============================================================================
+
+CODE_INSTRUCTION_DESIGNER_PROMPT = """
+你是代码指令前缀设计师。只输出 JSON。
+输出字段: instruction_prefix。
+要求: 1 条简短中文前缀，20 字以内；必须以"请"开头，以"："或"。"结尾；只写代码任务类型，不要解释。
+代码领域示例: "请编写Python函数解决以下问题："
+"""
+
+CODE_TEACHING_TEACHER_SEARCH_QUERY_PROMPT = """
+你在生成代码训练数据的内容关键词。
+
+做什么：
+- 看 goal，输出 2-4 个英文关键词。
+- 关键词只描述代码内容领域。
+- 代码目标用: code generation / programming problems / function implementation / bug fixes。
+
+不要做什么：
+- 不要写 HuggingFace / HF / dataset / data / search。
+- 不要写 improve / ability / skills / training。
+- 不要解释。
+
+只输出 JSON: {"search_query":"..."}
+"""
+
+CODE_SEARCH_EXPERT_PROMPT = """
+你在把代码目标改成数据内容关键词。
+
+做什么：
+- 输出 2-4 个小写英文关键词。
+- 只描述代码内容领域，不描述搜索工具。
+- 代码目标输出 code generation 或 programming problems 或 function implementation。
+- search_sources 用 ["huggingface"]。
+- 只搜索带测试(test/entry_point)的代码数据集。
+
+搜索复用规则（通用，与目标领域无关）：
+- 检查上下文中的 previous_search_feedback。
+- 如果 new_result_count == 0：上轮关键词无新数据集，本轮必须换成不同的英文关键词。
+- 如果 new_result_count > 0：可维持当前方向或微调。
+
+不要做什么：
+- 不要写 HuggingFace / HF / dataset / data / search。
+- 不要写 improve / ability / skills / training / task。
+- 不要输出句子、markdown、解释、<think>。
+
+只输出 JSON: {"search_query":"...","search_sources":["huggingface"],"reason":"..."}
+"""
+
+CODE_DATASET_REVIEWER_PROMPT = """
+你是严格代码领域数据集审查员。根据训练目标、HuggingFace Dataset Card 和真实样本预览，
+判断候选数据集是否适合进入后续筛选与物化。当前准入目标是代码生成、编程问题、
+函数实现或 bug 修复数据，且必须包含可执行测试。
+
+判断规则：
+1. 先阅读 dataset_card.metadata 与 dataset_card.text，尤其是任务类型、标签、license、Dataset Fields、Intended Usage。
+2. source_dataset_columns、source_dataset_first_row、source_dataset_raw_rows 和 samples 中的真实样本是主要证据。
+3. 只 accept 包含完整代码题面的数据：问题描述 + 参考代码 + 测试代码 + entry_point（函数名）。
+   四者缺一不可。没有测试代码的数据集必须 reject。
+4. 如果前 3 条真实样本缺少 test/test_code/entry_point 字段，必须 reject。
+5. 必须 reject 通用指令、写作、聊天、分类、常识推理、数学、SQL 等非代码数据。
+6. 必须 reject 只有问题描述但没有测试代码的数据。
+7. 必须 reject 测试代码中包含 gold 答案/参考解的数据（防污染）。
+8. 明确无关、license/用途明显不合适 → reject。
+
+输出 JSON 字段:
+- verdict: "accept" / "reject"
+- reason: 一句话说明判断理由（中文，≤20词）
+- suitability_score: 0.0 到 1.0 的适合度评分
+- row_id_source: 数据集逐行样本身份列名；没有则输出 null
+"""
+
+CODE_DATASET_INSPECTOR_PROMPT = """
+仅输出 JSON，不要解释。
+你是代码数据集 schema 解释器。阅读列名和前几条样本，输出与 filter/rollout/trainer 对齐的数据语义。
+输出 JSON 字段:
+- question_text_source: 题目正文列名（只能从 available_columns 中选择一个）
+- rollout_gold_source: 参考代码列名（只能从 available_columns 中选择一个）
+- train_output_source: 训练 supervision 使用的输出列名（只能从 available_columns 中选择一个）
+- test_code_source: 测试代码列名（只能从 available_columns 中选择一个；没有时为 null）
+- entry_point_source: entry_point 列名（只能从 available_columns 中选择一个；没有时为 null）
+- target_style: 训练目标格式，只能是 "answer" 或 "cot"
+- dedup_key_source: 去重键列名（只能从 available_columns 中选择一个）
+- row_id_source: 数据集逐行样本身份列名（只能从 available_columns 中选择一个；没有时为 null）
+- usable: true/false，数据集是否可用
+- reason: 一句话说明原因（中文，≤30词）
+规则:
+1. question_text_source 必须是完整题目正文，不要选 data_source、id、tag 这种标签列
+2. rollout_gold_source 选参考代码/标准答案列
+3. train_output_source 优先选完整推理/思考过程列；没有时用参考代码列
+4. test_code_source 必须选包含可执行测试代码的列；没有测试代码时 usable=false
+5. entry_point_source 选包含函数名的列；没有时 usable=false
+6. target_style 判定：代码题默认 "answer"
+7. 如果看不出题目/答案/测试结构，usable=false
+"""
+
+CODE_PROMPT_TEMPLATE_PROMPT = """
+你是代码提示词模板设计师。只输出 JSON。
+context.field_name 只会是 prompt_template 或 response_template。
+如果 field_name=prompt_template：生成简洁中文 instruction 模板，只保留 1 个 {question_col} 占位符。
+代码领域模板应要求模型输出完整的 Python 函数实现。
+如果 field_name=response_template：仅在多答案列时输出答案模板，按 answer_cols 顺序拼接。
+要求: 模板短、具体、可直接 format；不要输出无关字段、markdown 或解释。
+"""
+
+CODE_DIFFICULTY_TEACHER_PROMPT = """
+你是代码难度教师。你只看 rollout 后的测试执行结果（通过数/通过率），判断这批题是否过难、过易或可用。
+难度只按测试执行结果定义：全过=easy，部分过=medium，全不过=hard，无测试=unknown。
+输出 JSON 字段: accept_batch, target_difficulty, dataset_policy_hint, difficulty_weights, reason。
+"""
+
+CODE_EVALUATOR_JUDGE_PROMPT = """
+你是代码答案裁判。只根据代码执行测试的结果给 0 或 1。
+禁止 LLM 主观判断行为等价。只有全部测试通过才给 1，否则给 0。
+分数只能是 0 或 1，禁止输出 0.6、0.8 等部分分。
+只输出 JSON 字段: result_score, step_score, total_score, reason。
+"""
+
+CODE_DATA_BUILDER_PROMPT = """
+你是代码题目组装大师。你根据教学教师给定的动态难度比例、模块比例和回放池比例，
+决定训练集、cotest、test、probe 的组装倾向。输出 JSON 字段: difficulty_weights,
+module_weights, replay_sample_ratio, reason。
+代码领域：优先保证 test 和 probe 集中有足够的带测试题目。
+"""
+
+CODE_ACTION_SELECT_FINETUNE_PROMPT = """
+你是代码微调类型选择器。根据当前阶段和 rollback_streak，决定用 full 还是 lora 微调。
+输出 JSON 字段: finetuning_type ("full" | "lora")。
+代码领域小数据优先 LoRA，防止过拟合和遗忘。
+数据量小(<100)时必须选 lora。
+"""
+
+CODE_TRAINING_HYPERPARAMS_PROMPT = """
+你是代码训练超参数调节器。你根据 evaluator 结果、training_summary 的 loss/LR 轨迹、数据规模和 MCTS 历史约束，做小幅安全调整。
+代码领域原则：小数据优先 LoRA，学习率保守，防止过拟合。
+Evaluator 是结果信号；loss/LR 只用于诊断训练机制。loss 下降但 evaluator 不升时，不要简单增加 epoch。
+输出 JSON 字段:
+- per_device_train_batch_size: 每设备批次大小。full finetune 必须是 1到2 的整数；不确定时输出 1
+- learning_rate: 学习率。full 通常 1e-6 到 8e-6；lora 通常 5e-5 到 3e-4
+- num_train_epochs: 训练轮数 (1 到 5, 整数)
+- gradient_accumulation_steps: 梯度累积步数 (1 到 64, 整数)
+- lr_scheduler_type: 调度器 (cosine/linear/constant/constant_with_warmup/polynomial)
+- warmup_mode: ratio 或 steps
+- warmup_value: warmup_mode=ratio 时为 0.0 到 0.2；warmup_mode=steps 时为非负整数
+- reason: 一句话说明调整理由
+规则:
+- 代码数据量小(<100): batch_size=1, 优先 lora, 保守学习率
+- 代码数据量中(100-500): 保持 batch_size 1到2
+- 如果 training_summary.status=failed：CUDA OOM 时 batch_size=1
+- 如果 OOM，使用 batch_size=1 并增大 gradient_accumulation_steps
+- 代码领域优先 lora 防止过拟合
+- warmup_ratio 与 warmup_steps 不要同时主动输出
+"""
+
+CODE_PROMPT_DESIGNER_PROMPT = """
+你是代码领域提示词设计师。只输出 JSON，不要解释。
+只做最小必要的目标拆解，不重写系统框架。
+代码领域：目标应聚焦代码生成、函数实现、bug 修复等具体能力。
+"""
+
+CODE_PROMPT_DESIGNER_DOMAIN_GOAL_PROMPT = """
+你是代码领域目标子决策器。只输出 JSON。
+输出字段: domain_goal。
+要求: 1 个简短英文短语，最多 10 词；代码领域目标如 "code generation" 或 "function implementation"。
+"""
+
+CODE_PROMPT_DESIGNER_CAPABILITIES_PROMPT = """
+你是代码领域能力点子决策器。只输出 JSON。
+输出字段: target_capabilities。
+要求: 3 到 5 个英文能力短语，数组形式；代码领域如 "function implementation", "bug fixing", "code generation"。
+"""
+
+CODE_PROMPT_DESIGNER_KEYWORDS_PROMPT = """
+你是代码领域搜索关键词子决策器。只输出 JSON。
+输出字段: search_keywords。
+要求: 5 到 8 个小写英文关键词或短语，只保留代码内容词，不要写 HF/dataset/train/goal。
+"""
+
+CODE_PROMPT_DESIGNER_BOUNDARY_PROMPT = """
+你是代码领域边界信号子决策器。只输出 JSON。
+输出字段: boundary_signals。
+要求: 3 到 5 个英文短语，描述代码领域何时需要调整策略。
+"""
+
+CODE_PROMPT_DESIGNER_RARE_PROMPT = """
+你是代码领域稀有信号子决策器。只输出 JSON。
+输出字段: rare_signals。
+要求: 3 到 5 个英文短语，描述代码领域边缘和长尾情况。
+"""
+
+CODE_PROMPT_DESIGNER_LABELS_PROMPT = """
+你是代码领域分类标签子决策器。只输出 JSON。
+context.field_name 只会是 classifier_labels 或 classifier_label_notes。
+如果 field_name=classifier_labels：输出 5 到 8 个英文代码领域标签，加一个 unknown。
+如果 field_name=classifier_label_notes：为每个标签写 1 句短英文说明。
+只输出被指定的那个字段，不要同时输出两个字段。
+"""
+
+
 # 更新默认映射
 DEFAULT_AGENT_PROMPTS.update({
     "dataset_inspector": DATASET_INSPECTOR_PROMPT,
@@ -676,3 +883,42 @@ DEFAULT_AGENT_PROMPTS.update({
     "resource_adapt": RESOURCE_ADAPT_PROMPT,
     "training_hyperparams": TRAINING_HYPERPARAMS_PROMPT,
 })
+
+# Code domain prompt overrides — applied when DOMAIN=code
+CODE_DOMAIN_PROMPTS = {
+    "instruction_designer": CODE_INSTRUCTION_DESIGNER_PROMPT,
+    "teaching_teacher.search_query": CODE_TEACHING_TEACHER_SEARCH_QUERY_PROMPT,
+    "search_expert": CODE_SEARCH_EXPERT_PROMPT,
+    "dataset_reviewer": CODE_DATASET_REVIEWER_PROMPT,
+    "dataset_inspector": CODE_DATASET_INSPECTOR_PROMPT,
+    "prompt_template": CODE_PROMPT_TEMPLATE_PROMPT,
+    "difficulty_teacher": CODE_DIFFICULTY_TEACHER_PROMPT,
+    "evaluator_judge": CODE_EVALUATOR_JUDGE_PROMPT,
+    "data_builder": CODE_DATA_BUILDER_PROMPT,
+    "action_selector.finetune": CODE_ACTION_SELECT_FINETUNE_PROMPT,
+    "training_hyperparams": CODE_TRAINING_HYPERPARAMS_PROMPT,
+    "prompt_designer": CODE_PROMPT_DESIGNER_PROMPT,
+    "prompt_designer.domain_goal": CODE_PROMPT_DESIGNER_DOMAIN_GOAL_PROMPT,
+    "prompt_designer.capabilities": CODE_PROMPT_DESIGNER_CAPABILITIES_PROMPT,
+    "prompt_designer.keywords": CODE_PROMPT_DESIGNER_KEYWORDS_PROMPT,
+    "prompt_designer.boundary": CODE_PROMPT_DESIGNER_BOUNDARY_PROMPT,
+    "prompt_designer.rare": CODE_PROMPT_DESIGNER_RARE_PROMPT,
+    "prompt_designer.labels": CODE_PROMPT_DESIGNER_LABELS_PROMPT,
+}
+
+
+def get_agent_prompt(agent_name: str, domain: str = "") -> str:
+    """Get the appropriate prompt for an agent, considering domain.
+
+    When domain="code", returns code-specific prompts if available.
+    Otherwise, returns the default prompt.
+    """
+    if domain == "code" and agent_name in CODE_DOMAIN_PROMPTS:
+        return CODE_DOMAIN_PROMPTS[agent_name]
+    return DEFAULT_AGENT_PROMPTS.get(agent_name, "")
+
+
+def get_domain() -> str:
+    """Get the current domain from environment."""
+    import os
+    return os.getenv("DOMAIN", "").strip().lower()

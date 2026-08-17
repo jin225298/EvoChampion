@@ -13,6 +13,7 @@ from src.tools.inference_trace import build_inference_trace_row, write_inference
 from src.tools.llm_judge import judge_predictions_with_llm_batch
 from src.tools.model_runner import judge_answer, run_model_batch
 from src.tools.question_fields import add_processed_question_fields
+from src.tools.code_execution import is_code_domain, judge_code_from_prediction
 
 
 _THRESHOLD_KEYS = ("easy_min", "medium_min")
@@ -275,6 +276,7 @@ def _judge_predictions_batch(
     evaluation_methods: list[str],
     trace_id: str,
     round_id: int | None,
+    questions: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     judgements: list[dict[str, Any]] = [
         {
@@ -285,10 +287,29 @@ def _judge_predictions_batch(
         }
         for _ in predictions
     ]
+    code_domain = is_code_domain()
     llm_indices: list[int] = []
     for idx, prediction in enumerate(predictions):
         method = evaluation_methods[idx] if idx < len(evaluation_methods) else EVALUATION_METHOD_GOLD
         gold_answer = gold_answers[idx] if idx < len(gold_answers) else ""
+        # Code domain: use code execution judge
+        if code_domain and questions is not None:
+            q = questions[idx] if idx < len(questions) else {}
+            test_code = str(_field(q, "test", default="") or "")
+            entry_point = str(_field(q, "entry_point", default="") or "")
+            if test_code and entry_point:
+                result = judge_code_from_prediction(
+                    prediction=prediction,
+                    test_code=test_code,
+                    entry_point=entry_point,
+                )
+                judgements[idx] = {
+                    "correct": result.correct,
+                    "score": 1.0 if result.correct else 0.0,
+                    "reason": f"code execution: {result.diagnosis}",
+                    "source": "code_execution",
+                }
+                continue
         if method == EVALUATION_METHOD_LLM_JUDGE:
             llm_indices.append(idx)
             continue
@@ -405,6 +426,7 @@ def tag_questions_by_pass_rate(
             evaluation_methods=evaluation_methods,
             trace_id=trace_id,
             round_id=round_id,
+            questions=questions,
         )
         thinking_indices = [
             idx
@@ -431,6 +453,7 @@ def tag_questions_by_pass_rate(
                 evaluation_methods=[evaluation_methods[idx] for idx in thinking_indices],
                 trace_id=trace_id,
                 round_id=round_id,
+                questions=[questions[idx] for idx in thinking_indices],
             )
             final_thinking_judgements = {
                 original_idx: judgement

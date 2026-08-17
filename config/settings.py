@@ -57,6 +57,15 @@ INSTRUCTION_PREFIX = os.getenv("INSTRUCTION_PREFIX", "请解答下面的题目�
 # Whether to stratify the global probe by module (requires BENCHMARK_FORMAT=gsm8k or module inference)
 GLOBAL_PROBE_STRATIFIED_BY_MODULE = os.getenv("GLOBAL_PROBE_STRATIFIED_BY_MODULE", "true").lower() == "true"
 
+# =============================================================================
+# Domain Configuration
+# =============================================================================
+# Domain: "math" (default) or "code"
+DOMAIN = os.getenv("DOMAIN", "math").strip().lower()
+
+# Answer verifier type: "auto" (use code execution when DOMAIN=code) or "symbolic"
+ANSWER_VERIFIER_TYPE = os.getenv("ANSWER_VERIFIER_TYPE", "auto").strip().lower()
+
 
 # =============================================================================
 # Model Configuration
