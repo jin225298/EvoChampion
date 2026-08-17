@@ -1,0 +1,146 @@
+[
+  {
+    "question": "Write a function add(a, b) that returns the sum of a and b.",
+    "answer": "def add(a, b):\n    return a + b",
+    "test": "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(-1, 1) == 0\n    assert candidate(0, 0) == 0\n",
+    "entry_point": "add"
+  },
+  {
+    "question": "Write a function subtract(a, b) that returns a minus b.",
+    "answer": "def subtract(a, b):\n    return a - b",
+    "test": "def check(candidate):\n    assert candidate(5, 3) == 2\n    assert candidate(0, 0) == 0\n    assert candidate(1, 1) == 0\n",
+    "entry_point": "subtract"
+  },
+  {
+    "question": "Write a function multiply(a, b) that returns the product of a and b.",
+    "answer": "def multiply(a, b):\n    return a * b",
+    "test": "def check(candidate):\n    assert candidate(2, 3) == 6\n    assert candidate(0, 5) == 0\n    assert candidate(-2, 4) == -8\n",
+    "entry_point": "multiply"
+  },
+  {
+    "question": "Write a function divide(a, b) that returns a divided by b (integer division).",
+    "answer": "def divide(a, b):\n    return a // b",
+    "test": "def check(candidate):\n    assert candidate(6, 3) == 2\n    assert candidate(7, 2) == 3\n    assert candidate(10, 5) == 2\n",
+    "entry_point": "divide"
+  },
+  {
+    "question": "Write a function is_even(n) that returns True if n is even.",
+    "answer": "def is_even(n):\n    return n % 2 == 0",
+    "test": "def check(candidate):\n    assert candidate(4) is True\n    assert candidate(3) is False\n    assert candidate(0) is True\n",
+    "entry_point": "is_even"
+  },
+  {
+    "question": "Write a function is_odd(n) that returns True if n is odd.",
+    "answer": "def is_odd(n):\n    return n % 2 == 1",
+    "test": "def check(candidate):\n    assert candidate(3) is True\n    assert candidate(4) is False\n    assert candidate(1) is True\n",
+    "entry_point": "is_odd"
+  },
+  {
+    "question": "Write a function square(n) that returns n squared.",
+    "answer": "def square(n):\n    return n * n",
+    "test": "def check(candidate):\n    assert candidate(3) == 9\n    assert candidate(0) == 0\n    assert candidate(-2) == 4\n",
+    "entry_point": "square"
+  },
+  {
+    "question": "Write a function cube(n) that returns n cubed.",
+    "answer": "def cube(n):\n    return n * n * n",
+    "test": "def check(candidate):\n    assert candidate(2) == 8\n    assert candidate(0) == 0\n    assert candidate(-1) == -1\n",
+    "entry_point": "cube"
+  },
+  {
+    "question": "Write a function double(n) that returns twice n.",
+    "answer": "def double(n):\n    return 2 * n",
+    "test": "def check(candidate):\n    assert candidate(4) == 8\n    assert candidate(0) == 0\n    assert candidate(-3) == -6\n",
+    "entry_point": "double"
+  },
+  {
+    "question": "Write a function triple(n) that returns three times n.",
+    "answer": "def triple(n):\n    return 3 * n",
+    "test": "def check(candidate):\n    assert candidate(4) == 12\n    assert candidate(0) == 0\n    assert candidate(-2) == -6\n",
+    "entry_point": "triple"
+  },
+  {
+    "question": "Write a function abs_val(n) that returns the absolute value of n.",
+    "answer": "def abs_val(n):\n    return abs(n)",
+    "test": "def check(candidate):\n    assert candidate(5) == 5\n    assert candidate(-5) == 5\n    assert candidate(0) == 0\n",
+    "entry_point": "abs_val"
+  },
+  {
+    "question": "Write a function negate(n) that returns the negation of n.",
+    "answer": "def negate(n):\n    return -n",
+    "test": "def check(candidate):\n    assert candidate(5) == -5\n    assert candidate(-3) == 3\n    assert candidate(0) == 0\n",
+    "entry_point": "negate"
+  },
+  {
+    "question": "Write a function increment(n) that returns n plus one.",
+    "answer": "def increment(n):\n    return n + 1",
+    "test": "def check(candidate):\n    assert candidate(4) == 5\n    assert candidate(0) == 1\n    assert candidate(-1) == 0\n",
+    "entry_point": "increment"
+  },
+  {
+    "question": "Write a function decrement(n) that returns n minus one.",
+    "answer": "def decrement(n):\n    return n - 1",
+    "test": "def check(candidate):\n    assert candidate(4) == 3\n    assert candidate(0) == -1\n    assert candidate(1) == 0\n",
+    "entry_point": "decrement"
+  },
+  {
+    "question": "Write a function max_of_two(a, b) that returns the larger of a and b.",
+    "answer": "def max_of_two(a, b):\n    return a if a > b else b",
+    "test": "def check(candidate):\n    assert candidate(3, 7) == 7\n    assert candidate(7, 3) == 7\n    assert candidate(4, 4) == 4\n",
+    "entry_point": "max_of_two"
+  },
+  {
+    "question": "Write a function min_of_two(a, b) that returns the smaller of a and b.",
+    "answer": "def min_of_two(a, b):\n    return a if a < b else b",
+    "test": "def check(candidate):\n    assert candidate(3, 7) == 3\n    assert candidate(7, 3) == 3\n    assert candidate(4, 4) == 4\n",
+    "entry_point": "min_of_two"
+  },
+  {
+    "question": "Write a function sum_list(numbers) that returns the sum of a list of numbers.",
+    "answer": "def sum_list(numbers):\n    return sum(numbers)",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 6\n    assert candidate([]) == 0\n    assert candidate([5]) == 5\n",
+    "entry_point": "sum_list"
+  },
+  {
+    "question": "Write a function product_list(numbers) that returns the product of a list of numbers.",
+    "answer": "def product_list(numbers):\n    r = 1\n    for n in numbers:\n        r *= n\n    return r",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 6\n    assert candidate([]) == 1\n    assert candidate([5]) == 5\n",
+    "entry_point": "product_list"
+  },
+  {
+    "question": "Write a function count_evens(numbers) that returns how many even numbers are in the list.",
+    "answer": "def count_evens(numbers):\n    return sum(1 for n in numbers if n % 2 == 0)",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3, 4]) == 2\n    assert candidate([]) == 0\n    assert candidate([1, 3, 5]) == 0\n",
+    "entry_point": "count_evens"
+  },
+  {
+    "question": "Write a function reverse_string(s) that returns the reversed string.",
+    "answer": "def reverse_string(s):\n    return s[::-1]",
+    "test": "def check(candidate):\n    assert candidate('abc') == 'cba'\n    assert candidate('') == ''\n    assert candidate('a') == 'a'\n",
+    "entry_point": "reverse_string"
+  },
+  {
+    "question": "Write a function string_length(s) that returns the length of s.",
+    "answer": "def string_length(s):\n    return len(s)",
+    "test": "def check(candidate):\n    assert candidate('hello') == 5\n    assert candidate('') == 0\n    assert candidate('ab') == 2\n",
+    "entry_point": "string_length"
+  },
+  {
+    "question": "Write a function is_positive(n) that returns True if n is greater than 0.",
+    "answer": "def is_positive(n):\n    return n > 0",
+    "test": "def check(candidate):\n    assert candidate(5) is True\n    assert candidate(-2) is False\n    assert candidate(0) is False\n",
+    "entry_point": "is_positive"
+  },
+  {
+    "question": "Write a function is_negative(n) that returns True if n is less than 0.",
+    "answer": "def is_negative(n):\n    return n < 0",
+    "test": "def check(candidate):\n    assert candidate(-5) is True\n    assert candidate(2) is False\n    assert candidate(0) is False\n",
+    "entry_point": "is_negative"
+  },
+  {
+    "question": "Write a function concatenate(a, b) that returns the concatenation of strings a and b.",
+    "answer": "def concatenate(a, b):\n    return a + b",
+    "test": "def check(candidate):\n    assert candidate('hello', 'world') == 'helloworld'\n    assert candidate('', 'x') == 'x'\n    assert candidate('a', '') == 'a'\n",
+    "entry_point": "concatenate"
+  }
+]

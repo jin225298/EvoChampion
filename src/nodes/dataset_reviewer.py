@@ -721,6 +721,14 @@ def _ranked_split_candidates(available_splits: list[str], requested_split: Any) 
 def _load_hf_dataset(dataset_id: str, subset: str | None, split: str, *, streaming: bool):
     """加载 HF 数据集，兼容 subset=None 时省略 name 参数的情形。"""
     normalized_subset = _normalise_config_name(subset)
+    # Local dataset directories (code-domain smoke data) cannot be streamed the
+    # way hub datasets are; load them non-streaming so the reviewer can read
+    # samples without network access.
+    if os.path.isdir(dataset_id):
+        load_dataset = getattr(_datasets_module(), "load_dataset")
+        if normalized_subset is None:
+            return load_dataset(dataset_id, split=split)
+        return load_dataset(dataset_id, name=normalized_subset, split=split)
     if os.getenv("USE_HFD_DATASET_DOWNLOAD", "").strip().lower() in ("1", "true", "yes", "on"):
         return load_hf_dataset_with_fallback(
             dataset_id,
