@@ -799,17 +799,35 @@ def _log_ab_comparison(
 
 
 def prompt_for_agent(state: dict[str, Any], agent_name: str, default_prompt: str) -> str:
-    """从提示词设计师产物中读取提示词；没有则使用默认框架。"""
+    """从提示词设计师产物中读取提示词；没有则使用默认框架。
+
+    Domain-aware: under ``DOMAIN=code`` the code-domain prompt for the agent
+    (from ``CODE_AGENT_PROMPTS``) is used as the fallback when no prompt-designer
+    override exists, so strategy nodes steer toward code-appropriate decisions
+    (search for tested data, execution-only judging, LoRA for small data, etc.).
+    Math domain behavior is unchanged (falls back to the passed default).
+    """
+    # Domain-aware default: code domain uses code prompts when available.
+    code_default = ""
+    try:
+        from config import settings as _settings
+        if getattr(_settings, "IS_CODE_DOMAIN", False):
+            from src.tools.agent_prompts import CODE_AGENT_PROMPTS
+            code_default = CODE_AGENT_PROMPTS.get(agent_name, "")
+    except Exception:
+        pass
+    effective_default = code_default or default_prompt
+
     if agent_name in _CRITICAL_PROMPT_AGENTS or agent_name.startswith("parameter_master"):
-        return default_prompt
+        return effective_default
     pack = state.get("agent_prompt_pack", {}) if isinstance(state, dict) else {}
     if not isinstance(pack, dict):
-        return default_prompt
+        return effective_default
     prompts = pack.get("prompts", {})
     if not isinstance(prompts, dict):
-        return default_prompt
+        return effective_default
     prompt = prompts.get(agent_name)
-    return str(prompt) if prompt else default_prompt
+    return str(prompt) if prompt else effective_default
 
 
 def clamp_distribution(raw: Any, allowed: set[str], fallback: dict[str, float]) -> dict[str, float]:

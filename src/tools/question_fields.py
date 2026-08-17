@@ -47,7 +47,7 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
     if target_style == TARGET_STYLE_ANSWER and not train_output:
         train_output = rollout_gold_answer
     raw_method = text_or_empty(get_question_field(item, "evaluation_method", ""))
-    evaluation_method = raw_method if raw_method in {"gold", "llm_judge"} else ""
+    evaluation_method = raw_method if raw_method in {"gold", "llm_judge", "code_exec"} else ""
     raw_needs_judge = get_question_field(item, "needs_judge", False)
     needs_judge = raw_needs_judge if isinstance(raw_needs_judge, bool) else str(raw_needs_judge).lower() in {
         "1",
@@ -55,7 +55,22 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
         "yes",
     }
     if not evaluation_method:
-        evaluation_method = "gold" if rollout_gold_answer or gold_answer else "llm_judge" if train_output else "gold"
+        # Code domain + executable test -> code-execution judging.
+        _is_code = False
+        try:
+            from config import settings as _settings
+            _is_code = getattr(_settings, "IS_CODE_DOMAIN", False)
+        except Exception:
+            _is_code = False
+        _has_test = bool(text_or_empty(get_question_field(item, "test", "")))
+        if _is_code and _has_test:
+            evaluation_method = "code_exec"
+        elif rollout_gold_answer or gold_answer:
+            evaluation_method = "gold"
+        elif train_output:
+            evaluation_method = "llm_judge"
+        else:
+            evaluation_method = "gold"
     needs_judge = bool(needs_judge or evaluation_method == "llm_judge")
     return {
         "rollout_gold_answer": rollout_gold_answer,

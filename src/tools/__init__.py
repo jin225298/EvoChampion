@@ -8,6 +8,12 @@ def judge_answer(*args, **kwargs):
     return _judge_answer(*args, **kwargs)
 
 
+def judge_prediction_for_item(*args, **kwargs):
+    from src.tools.model_runner import judge_prediction_for_item as _judge_prediction_for_item
+
+    return _judge_prediction_for_item(*args, **kwargs)
+
+
 def run_model_once(*args, **kwargs):
     from src.tools.model_runner import run_model_once as _run_model_once
 
@@ -17,6 +23,7 @@ def run_model_once(*args, **kwargs):
 __all__ = [
     "search_hf_datasets",
     "judge_answer",
+    "judge_prediction_for_item",
     "run_model_once",
     "launch_training",
 ]

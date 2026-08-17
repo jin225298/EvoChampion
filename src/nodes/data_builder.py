@@ -599,6 +599,10 @@ def _alpaca_metadata(q: dict, split_tag: int, split_role: str) -> dict:
         "source_dataset_schema": q.get("source_dataset_schema") or {},
         "replay_use_count": q.get("replay_use_count"),
         "category": q.get("category", q.get("module", "unknown")),
+        # Code-domain fields: preserved so the evaluator can execute candidate
+        # code against the problem's tests (LLaMA-Factory ignores extra keys).
+        "test": q.get("test", ""),
+        "entry_point": q.get("entry_point", ""),
     }
 
 

@@ -9,9 +9,10 @@ from config.settings import (
     DIFFICULTY_LATE_ROUND,       # 从第几轮开始视为"后期"（使用更宽松的阈值）
     ROLLOUT_MAX_NEW_TOKENS,
 )
+from config.settings import IS_CODE_DOMAIN
 from src.tools.inference_trace import build_inference_trace_row, write_inference_trace_rows
 from src.tools.llm_judge import judge_predictions_with_llm_batch
-from src.tools.model_runner import judge_answer, run_model_batch
+from src.tools.model_runner import judge_answer, judge_prediction_for_item, run_model_batch
 from src.tools.question_fields import add_processed_question_fields
 
 
@@ -19,6 +20,7 @@ _THRESHOLD_KEYS = ("easy_min", "medium_min")
 ROLLOUT_ANSWER_ONLY_SUFFIX = "\n\nOnly output the final answer in \\boxed{}."
 EVALUATION_METHOD_GOLD = "gold"
 EVALUATION_METHOD_LLM_JUDGE = "llm_judge"
+EVALUATION_METHOD_CODE_EXEC = "code_exec"
 
 
 def _rollout_prompt(question_text: str) -> str:
@@ -26,6 +28,10 @@ def _rollout_prompt(question_text: str) -> str:
 
 
 def _answer_only_rollout_prompt(question_text: str) -> str:
+    # Code domain: no math-style \boxed{} suffix; the instruction prefix already
+    # asks for a bare function. Just return the question text.
+    if IS_CODE_DOMAIN:
+        return question_text
     return f"{question_text}{ROLLOUT_ANSWER_ONLY_SUFFIX}"
 
 
@@ -257,6 +263,8 @@ def _gold_answer_for_item(item: Any) -> str:
 
 def _evaluation_method_for_item(item: Any, gold_answer: str, reference_solution: str) -> str:
     raw = str(_field(item, "evaluation_method", "judge_mode", default="") or "").strip().lower()
+    if raw == EVALUATION_METHOD_CODE_EXEC:
+        return EVALUATION_METHOD_CODE_EXEC
     if raw == EVALUATION_METHOD_LLM_JUDGE or _truthy(_field(item, "needs_judge", default=False)):
         return EVALUATION_METHOD_LLM_JUDGE
     if gold_answer:
@@ -275,6 +283,7 @@ def _judge_predictions_batch(
     evaluation_methods: list[str],
     trace_id: str,
     round_id: int | None,
+    items: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     judgements: list[dict[str, Any]] = [
         {
@@ -289,6 +298,18 @@ def _judge_predictions_batch(
     for idx, prediction in enumerate(predictions):
         method = evaluation_methods[idx] if idx < len(evaluation_methods) else EVALUATION_METHOD_GOLD
         gold_answer = gold_answers[idx] if idx < len(gold_answers) else ""
+        # Code domain: judge by executing the candidate against the item's tests.
+        # No symbolic math, no LLM-as-judge - correctness is purely test execution.
+        if IS_CODE_DOMAIN or method == EVALUATION_METHOD_CODE_EXEC:
+            item = items[idx] if items and idx < len(items) else {}
+            correct = judge_prediction_for_item(prediction, item, gold_answer)
+            judgements[idx] = {
+                "correct": correct,
+                "score": 1.0 if correct else 0.0,
+                "reason": "code execution",
+                "source": "code_exec",
+            }
+            continue
         if method == EVALUATION_METHOD_LLM_JUDGE:
             llm_indices.append(idx)
             continue
@@ -405,6 +426,7 @@ def tag_questions_by_pass_rate(
             evaluation_methods=evaluation_methods,
             trace_id=trace_id,
             round_id=round_id,
+            items=questions,
         )
         thinking_indices = [
             idx
@@ -431,6 +453,7 @@ def tag_questions_by_pass_rate(
                 evaluation_methods=[evaluation_methods[idx] for idx in thinking_indices],
                 trace_id=trace_id,
                 round_id=round_id,
+                items=[questions[idx] for idx in thinking_indices],
             )
             final_thinking_judgements = {
                 original_idx: judgement

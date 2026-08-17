@@ -2176,6 +2176,54 @@ def judge_answer(prediction: str, gold_answer: str) -> bool:
     return False
 
 
+def judge_prediction_for_item(prediction: str, item, gold_answer: str = "") -> bool:
+    """Domain-aware judging for one question item.
+
+    Code domain (``USE_CODE_EXECUTION_VERIFIER``): execute the candidate code
+    against the item's executable tests (``item['test']`` + ``item['entry_point']``)
+    via :mod:`src.tools.code_execution`. No symbolic math, no LLM-as-judge -
+    correctness is purely "did the candidate pass the tests".
+
+    Math domain (default): symbolic math-verify / SymPy judge on
+    ``(prediction, gold_answer)`` via :func:`judge_answer`.
+
+    ``item`` may be a dict (question record) or a Pydantic question model.
+    ``gold_answer`` is optional; when omitted it is read from the item.
+    """
+    try:
+        from config import settings as _settings
+        use_code = getattr(_settings, "USE_CODE_EXECUTION_VERIFIER", False)
+    except Exception:
+        use_code = False
+
+    if use_code:
+        from src.tools.code_execution import judge_code_prediction
+
+        test_code = ""
+        entry_point = ""
+        if isinstance(item, dict):
+            test_code = str(item.get("test", "") or "")
+            entry_point = str(item.get("entry_point", "") or "")
+        else:
+            test_code = str(getattr(item, "test", "") or "")
+            entry_point = str(getattr(item, "entry_point", "") or "")
+        return judge_code_prediction(prediction, test_code, entry_point).passed
+
+    if not gold_answer:
+        if isinstance(item, dict):
+            gold_answer = (
+                item.get("rollout_gold_answer")
+                or item.get("gold_answer")
+                or ""
+            )
+        else:
+            gold_answer = (
+                getattr(item, "rollout_gold_answer", "")
+                or getattr(item, "gold_answer", "")
+            )
+    return judge_answer(prediction, gold_answer)
+
+
 def _extract_final_answer(text: str, marker: str | None = None) -> str:
     """Extract final answer with priority: boxed > sep-marker > regex patterns > last number.
 

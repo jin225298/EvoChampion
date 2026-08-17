@@ -101,8 +101,10 @@ class QuestionPayload(BaseModel):
     gold_answer: str
     rollout_gold_answer: str = ""
     train_output: str = ""
+    test: str = ""
+    entry_point: str = ""
     target_style: Literal["answer", "cot"] = "answer"
-    evaluation_method: Literal["gold", "llm_judge"] = "gold"
+    evaluation_method: Literal["gold", "llm_judge", "code_exec"] = "gold"
     needs_judge: bool = False
     source_dataset_id: str | None = None
     source_dataset_row_id: str | None = None
@@ -231,8 +233,10 @@ class SingleRolloutAnswer(BaseModel):  # 单次 rollout 的答案与判定结果
     gold_answer: str
     rollout_gold_answer: str = ""
     train_output: str = ""
+    test: str = ""
+    entry_point: str = ""
     target_style: Literal["answer", "cot"] = "answer"
-    evaluation_method: Literal["gold", "llm_judge"] = "gold"
+    evaluation_method: Literal["gold", "llm_judge", "code_exec"] = "gold"
     needs_judge: bool = False
     source_dataset_id: str | None = None
     source_dataset_row_id: str | None = None
@@ -269,8 +273,10 @@ class QuestionScore(BaseModel):
     gold_answer: str
     rollout_gold_answer: str = ""
     train_output: str = ""
+    test: str = ""
+    entry_point: str = ""
     target_style: Literal["answer", "cot"] = "answer"
-    evaluation_method: Literal["gold", "llm_judge"] = "gold"
+    evaluation_method: Literal["gold", "llm_judge", "code_exec"] = "gold"
     needs_judge: bool = False
     source_dataset_id: str | None = None
     source_dataset_row_id: str | None = None
@@ -312,8 +318,10 @@ class ClassifiedQuestion(BaseModel):
     gold_answer: str
     rollout_gold_answer: str = ""
     train_output: str = ""
+    test: str = ""
+    entry_point: str = ""
     target_style: Literal["answer", "cot"] = "answer"
-    evaluation_method: Literal["gold", "llm_judge"] = "gold"
+    evaluation_method: Literal["gold", "llm_judge", "code_exec"] = "gold"
     needs_judge: bool = False
     source_dataset_id: str | None = None
     source_dataset_row_id: str | None = None
@@ -424,8 +432,10 @@ class ReplayBufferEntryPayload(BaseModel):
     gold_answer: str = ""
     rollout_gold_answer: str = ""
     train_output: str = ""
+    test: str = ""
+    entry_point: str = ""
     target_style: Literal["answer", "cot"] = "answer"
-    evaluation_method: Literal["gold", "llm_judge"] = "gold"
+    evaluation_method: Literal["gold", "llm_judge", "code_exec"] = "gold"
     needs_judge: bool = False
     source_dataset_id: str | None = None
     source_dataset_row_id: str | None = None

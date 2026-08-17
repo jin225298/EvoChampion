@@ -76,7 +76,7 @@ from src.models.messages import (
     TrainResultPayload,
 )
 from src.models.state import EvoState
-from src.tools.model_runner import judge_answer, run_model_batch
+from src.tools.model_runner import judge_answer, judge_prediction_for_item, run_model_batch
 from src.tools.difficulty_tagger import tag_questions_by_pass_rate
 from src.tools.agent_prompts import EVALUATOR_JUDGE_PROMPT
 from src.tools.data_pipeline.log_parser import parse_structured_training_logs, parse_training_log
@@ -380,8 +380,8 @@ def evaluate_old_mastered_set(candidate_model_path: str, mastered_set_path: str)
     predictions = _run_eval_batch(candidate_model_path, prompts)
 
     errors = 0
-    for pred, gold in zip(predictions, gold_answers):
-        if not judge_answer(pred, gold):
+    for pred, gold, q in zip(predictions, gold_answers, eval_questions):
+        if not judge_prediction_for_item(pred, q, gold):
             errors += 1
 
     error_rate = errors / total
@@ -426,16 +426,16 @@ def evaluate_new_skill_gain(
     # Batch inference for champion
     if champion_model_path:
         before_preds = _run_eval_batch(champion_model_path, prompts)
-        for pred, gold in zip(before_preds, gold_answers):
-            if judge_answer(pred, gold):
+        for pred, gold, item in zip(before_preds, gold_answers, eval_items):
+            if judge_prediction_for_item(pred, item, gold):
                 before_correct += 1
             before_total += 1
 
     # Batch inference for candidate
     if candidate_model_path:
         after_preds = _run_eval_batch(candidate_model_path, prompts)
-        for pred, gold in zip(after_preds, gold_answers):
-            if judge_answer(pred, gold):
+        for pred, gold, item in zip(after_preds, gold_answers, eval_items):
+            if judge_prediction_for_item(pred, item, gold):
                 after_correct += 1
             after_total += 1
 
@@ -493,7 +493,7 @@ def evaluate_probe_set_detailed(
         question_difficulties,
         all_questions,
     ):
-        is_correct = judge_answer(pred, gold)
+        is_correct = judge_prediction_for_item(pred, question, gold)
         if is_correct:
             correct += 1
         else:
@@ -685,6 +685,8 @@ def _evaluation_method_for_item(item: dict | None) -> str:
     raw = raw.replace("-", "_")
     if raw in {"llm_judge", "llm_as_judge", "llmasjudge"}:
         return "llm_judge"
+    if raw == "code_exec":
+        return "code_exec"
     if _truthy_eval_flag(item.get("needs_judge", False)):
         return "llm_judge"
     return "gold"
@@ -709,8 +711,8 @@ def _judge_eval_prediction(
                 state,
                 reference_solution=_reference_solution_for_item(item),
             ))
-        return judge_answer(prediction, gold_answer)
-    return judge_answer(prediction, gold_answer)
+        return judge_prediction_for_item(prediction, item, gold_answer)
+    return judge_prediction_for_item(prediction, item, gold_answer)
 
 
 def _judgements_from_predictions(
@@ -1626,10 +1628,10 @@ def _run_frozen_multi_rollout(
     for idx in range(len(frozen_prompts)):
         gold = frozen_gold[idx] if idx < len(frozen_gold) else ""
         chunk = predictions[idx * rollout_times:(idx + 1) * rollout_times]
-        correct_count = sum(1 for pred in chunk if judge_answer(pred, gold))
+        item = questions[idx] if questions and idx < len(questions) else {}
+        correct_count = sum(1 for pred in chunk if judge_prediction_for_item(pred, item, gold))
         stats[correct_count] = stats.get(correct_count, 0) + 1
         if trace_id:
-            item = questions[idx] if questions and idx < len(questions) else {}
             difficulty = (
                 difficulties[idx]
                 if difficulties is not None and idx < len(difficulties)
@@ -1646,7 +1648,7 @@ def _run_frozen_multi_rollout(
                     prompt=frozen_prompts[idx],
                     gold_answer=gold,
                     prediction=pred,
-                    correct=judge_answer(pred, gold),
+                    correct=judge_prediction_for_item(pred, item, gold),
                     max_new_tokens=int(EVAL_MAX_NEW_TOKENS),
                     temperature=ROLLOUT_TEMPERATURE,
                     top_p=ROLLOUT_TOP_P,

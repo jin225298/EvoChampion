@@ -1,0 +1,50 @@
+[
+  {
+    "question": "Write a function `divide(a, b)` that returns a divided by b as a float. Assume b != 0.",
+    "answer": "def divide(a, b):\n    return a / b",
+    "test": "def check(candidate):\n    assert candidate(6, 2) == 3.0\n    assert candidate(5, 2) == 2.5\n    assert candidate(0, 5) == 0.0",
+    "entry_point": "divide"
+  },
+  {
+    "question": "Write a function `min_of_list(lst)` that returns the minimum value in the list.",
+    "answer": "def min_of_list(lst):\n    return min(lst)",
+    "test": "def check(candidate):\n    assert candidate([3, 1, 2]) == 1\n    assert candidate([5]) == 5\n    assert candidate([-1, -5, -3]) == -5",
+    "entry_point": "min_of_list"
+  },
+  {
+    "question": "Write a function `capitalize_first(s)` that returns s with its first character uppercased and the rest unchanged.",
+    "answer": "def capitalize_first(s):\n    if not s:\n        return s\n    return s[0].upper() + s[1:]",
+    "test": "def check(candidate):\n    assert candidate('hello') == 'Hello'\n    assert candidate('') == ''\n    assert candidate('a') == 'A'\n    assert candidate('world') == 'World'",
+    "entry_point": "capitalize_first"
+  },
+  {
+    "question": "Write a function `string_length(s)` that returns the number of characters in s.",
+    "answer": "def string_length(s):\n    return len(s)",
+    "test": "def check(candidate):\n    assert candidate('hello') == 5\n    assert candidate('') == 0\n    assert candidate('a') == 1",
+    "entry_point": "string_length"
+  },
+  {
+    "question": "Write a function `square(n)` that returns n squared.",
+    "answer": "def square(n):\n    return n * n",
+    "test": "def check(candidate):\n    assert candidate(2) == 4\n    assert candidate(3) == 9\n    assert candidate(0) == 0\n    assert candidate(-4) == 16",
+    "entry_point": "square"
+  },
+  {
+    "question": "Write a function `increment(n)` that returns n + 1.",
+    "answer": "def increment(n):\n    return n + 1",
+    "test": "def check(candidate):\n    assert candidate(1) == 2\n    assert candidate(0) == 1\n    assert candidate(-5) == -4",
+    "entry_point": "increment"
+  },
+  {
+    "question": "Write a function `concat_strings(a, b)` that returns the concatenation of strings a and b.",
+    "answer": "def concat_strings(a, b):\n    return a + b",
+    "test": "def check(candidate):\n    assert candidate('foo', 'bar') == 'foobar'\n    assert candidate('', 'x') == 'x'\n    assert candidate('x', '') == 'x'",
+    "entry_point": "concat_strings"
+  },
+  {
+    "question": "Write a function `count_char(s, ch)` that returns how many times character ch appears in string s.",
+    "answer": "def count_char(s, ch):\n    return s.count(ch)",
+    "test": "def check(candidate):\n    assert candidate('hello', 'l') == 2\n    assert candidate('aaa', 'a') == 3\n    assert candidate('abc', 'z') == 0",
+    "entry_point": "count_char"
+  }
+]

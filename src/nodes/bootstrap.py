@@ -60,7 +60,7 @@ from src.models.messages import (
 )
 from src.models.state import EvoState
 from src.tools.model_runner import warmup_model
-from src.tools.model_runner import judge_answer
+from src.tools.model_runner import judge_answer, judge_prediction_for_item
 from src.tools.question_registry import mark_questions_active_holdout, mark_questions_probe_holdout
 from src.tools.question_registry import mark_questions_external_probe
 from src.tools.replay_buffer import load_replay_buffer
@@ -412,7 +412,7 @@ def _evaluate_base_model_frozen(
     if not frozen_prompts:
         return None
     predictions = warmup_and_eval_batch(champion_model_path, frozen_prompts)
-    correct = sum(1 for p, g in zip(predictions, frozen_gold) if judge_answer(p, g))
+    correct = sum(1 for p, g, q in zip(predictions, frozen_gold, _questions) if judge_prediction_for_item(p, q, g))
     error_rate = 1.0 - correct / len(frozen_gold) if frozen_gold else None
     print(f"[bootstrap] Base model frozen probe 1-shot: {correct}/{len(frozen_gold)} correct, error_rate={error_rate:.4f}")
 

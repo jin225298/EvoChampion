@@ -903,6 +903,21 @@ def normalize_item(
     train_output = _extract_text(item, train_field if isinstance(train_field, str) else None)
     dedup_key = _extract_text(item, dedup_field if isinstance(dedup_field, str) else None)
 
+    # Code-domain fields: executable test + entry point. Schema may carry them;
+    # for code domain fall back to the configured benchmark keys.
+    test_field = schema.get("test_field")
+    entry_point_field = schema.get("entry_point_field")
+    if not test_field or not entry_point_field:
+        try:
+            from config import settings as _settings
+            if getattr(_settings, "IS_CODE_DOMAIN", False):
+                test_field = test_field or _settings.BENCHMARK_TEST_KEY
+                entry_point_field = entry_point_field or _settings.BENCHMARK_ENTRY_POINT_KEY
+        except Exception:
+            pass
+    test_code = _extract_text(item, test_field) if isinstance(test_field, str) else ""
+    entry_point = _extract_text(item, entry_point_field) if isinstance(entry_point_field, str) else ""
+
     if not _valid_question_text(question_text, q_field):
         return None
     proof_gold = _is_formal_proof_gold(a_field, gold_answer) or _is_formal_proof_gold(rollout_field, rollout_gold_answer)
@@ -911,12 +926,22 @@ def normalize_item(
         rollout_gold_answer = ""
         raw_evaluation_method = "llm_judge"
 
-    evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else (
-        "llm_judge" if raw_evaluation_method == "llm_judge" or train_output else "gold"
-    )
+    try:
+        from config import settings as _settings
+        _is_code_domain = getattr(_settings, "IS_CODE_DOMAIN", False)
+    except Exception:
+        _is_code_domain = False
+    if _is_code_domain:
+        evaluation_method = "code_exec"
+    else:
+        evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else (
+            "llm_judge" if raw_evaluation_method == "llm_judge" or train_output else "gold"
+        )
     if evaluation_method == "gold" and not (gold_answer or rollout_gold_answer):
         return None
     if evaluation_method == "llm_judge" and not train_output:
+        return None
+    if evaluation_method == "code_exec" and not test_code:
         return None
     if evaluation_method == "gold" and not _valid_answer_text(gold_answer or rollout_gold_answer, a_field):
         return None
@@ -954,6 +979,8 @@ def normalize_item(
         "target_style": target_style,
         "evaluation_method": evaluation_method,
         "needs_judge": evaluation_method == "llm_judge",
+        "test": test_code,
+        "entry_point": entry_point,
         "dedup_key": dedup_key or question_text,
         "source_dataset_id": dataset_id,
         "source_dataset_row_id": row_id,

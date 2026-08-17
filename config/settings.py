@@ -57,6 +57,43 @@ INSTRUCTION_PREFIX = os.getenv("INSTRUCTION_PREFIX", "请解答下面的题目�
 # Whether to stratify the global probe by module (requires BENCHMARK_FORMAT=gsm8k or module inference)
 GLOBAL_PROBE_STRATIFIED_BY_MODULE = os.getenv("GLOBAL_PROBE_STRATIFIED_BY_MODULE", "true").lower() == "true"
 
+# Extra field keys for code datasets (question/answer/test/entry_point).
+# BENCHMARK_QUESTION_KEY/BENCHMARK_ANSWER_KEY cover question/answer; these cover
+# the executable test block and the function name the test calls.
+BENCHMARK_TEST_KEY = os.getenv("BENCHMARK_TEST_KEY", "test")
+BENCHMARK_ENTRY_POINT_KEY = os.getenv("BENCHMARK_ENTRY_POINT_KEY", "entry_point")
+
+
+# =============================================================================
+# Domain Configuration
+# =============================================================================
+# DOMAIN selects the task domain. "math" (default) judges rollouts with
+# math-verify/SymPy symbolic checks. "code" judges rollouts by executing the
+# candidate against the problem's executable tests (src/tools/code_execution.py).
+DOMAIN = os.getenv("DOMAIN", "math").strip().lower()
+if DOMAIN not in {"math", "code"}:
+    DOMAIN = "math"
+
+# ANSWER_VERIFIER_TYPE picks the judging backend:
+#   "auto" -> resolve from DOMAIN (code->code_exec, math->math_verify)
+#   "math" -> symbolic math-verify/SymPy judge
+#   "code" -> code-execution judge (run candidate vs tests)
+#   "llm"  -> LLM-as-judge
+ANSWER_VERIFIER_TYPE = os.getenv("ANSWER_VERIFIER_TYPE", "auto").strip().lower()
+if ANSWER_VERIFIER_TYPE == "auto":
+    ANSWER_VERIFIER_TYPE = "code" if DOMAIN == "code" else "math"
+if ANSWER_VERIFIER_TYPE not in {"math", "code", "llm", "auto"}:
+    ANSWER_VERIFIER_TYPE = "math"
+
+# Convenience flags so nodes/verifiers can branch without re-parsing env.
+IS_CODE_DOMAIN = DOMAIN == "code"
+USE_CODE_EXECUTION_VERIFIER = ANSWER_VERIFIER_TYPE == "code"
+
+# Code-domain judging knobs (also read directly by src/tools/code_execution.py).
+CODE_JUDGE_TIMEOUT_SECONDS = float(os.getenv("CODE_JUDGE_TIMEOUT_SECONDS", "10"))
+CODE_JUDGE_MAX_WORKERS = int(os.getenv("CODE_JUDGE_MAX_WORKERS", "8"))
+CODE_JUDGE_CPU_SECONDS = int(os.getenv("CODE_JUDGE_CPU_SECONDS", "30"))
+
 
 # =============================================================================
 # Model Configuration

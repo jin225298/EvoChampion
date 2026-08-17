@@ -676,3 +676,286 @@ DEFAULT_AGENT_PROMPTS.update({
     "resource_adapt": RESOURCE_ADAPT_PROMPT,
     "training_hyperparams": TRAINING_HYPERPARAMS_PROMPT,
 })
+
+
+# =============================================================================
+# Code-domain prompts (DOMAIN=code)
+# =============================================================================
+# Code judging is execution-only: a candidate is correct iff its definition
+# passes the executable tests. No LLM-as-judge, no symbolic math equivalence,
+# no "behavioral equivalence" by reading code. These prompts steer the strategy
+# layer to produce code-appropriate search queries, review verdicts, difficulty
+# labels, and training config.
+
+CODE_INSTRUCTION_DESIGNER_PROMPT = """
+你是代码任务的指令前缀设计师。只输出 JSON。
+输出字段: instruction_prefix。
+要求: 1 条简短英文前缀，要求模型只输出函数定义、不要解释、不要 markdown 代码块；以冒号或句号结尾；不要解释。
+"""
+
+CODE_PROMPT_DESIGNER_DOMAIN_GOAL_PROMPT = """
+你是代码领域目标子决策器。只输出 JSON。
+输出字段: domain_goal。
+要求: 1 个简短英文短语，描述要提升的代码能力（如 "Python function correctness with tests"），最多 10 词；不要解释。
+"""
+
+CODE_PROMPT_DESIGNER_CAPABILITIES_PROMPT = """
+你是代码能力点子决策器。只输出 JSON。
+输出字段: target_capabilities。
+要求: 3 到 5 个英文能力短语，围绕"写出能通过测试的正确 Python 函数"，如 arithmetic, string ops, list ops, recursion；不要解释。
+"""
+
+CODE_PROMPT_DESIGNER_KEYWORDS_PROMPT = """
+你是代码搜索关键词子决策器。只输出 JSON。
+输出字段: search_keywords。
+要求: 5 到 8 个小写英文关键词，只描述代码题目内容（如 humaneval, mbpp, python programming, function implementation, unit tests, coding problems）；不要写 HF/dataset/train。
+"""
+
+CODE_PROMPT_DESIGNER_BOUNDARY_PROMPT = """
+你是代码边界信号子决策器。只输出 JSON。
+输出字段: boundary_signals。
+要求: 3 到 5 个英文短语，描述何时需要调整代码训练策略（如 candidate mostly fails tests, compile errors high, timeout rate high）。
+"""
+
+CODE_PROMPT_DESIGNER_RARE_PROMPT = """
+你是代码稀有信号子决策器。只输出 JSON。
+输出字段: rare_signals。
+要求: 3 到 5 个英文短语，描述代码长尾情况（如 edge case missing, infinite loop, wrong signature, import not allowed）。
+"""
+
+CODE_PROMPT_DESIGNER_LABELS_PROMPT = """
+你是代码分类标签子决策器。只输出 JSON。
+context.field_name 只会是 classifier_labels 或 classifier_label_notes。
+如果 field_name=classifier_labels：输出 5 到 8 个英文代码题型标签，加一个 unknown；标签要短、具体（如 arithmetic, string_manipulation, list_processing, recursion, sorting, math_functions）。
+如果 field_name=classifier_label_notes：为每个标签写 1 句短英文说明。
+只输出被指定的那个字段，不要同时输出两个字段。
+"""
+
+CODE_TEACHING_TEACHER_SEARCH_QUERY_PROMPT = """
+你在生成代码训练数据的内容关键词。
+
+做什么：
+- 看 goal，输出 2-4 个英文关键词。
+- 关键词只描述代码题目内容。
+- 必须强调"带可执行测试"的数据：humaneval, mbpp, python coding with tests, function implementation unit tests。
+
+不要做什么：
+- 不要写 HuggingFace / HF / dataset / data / search。
+- 不要写 improve / ability / skills / training。
+- 不要解释。
+
+只输出 JSON: {"search_query":"..."}
+"""
+
+CODE_SEARCH_EXPERT_PROMPT = """
+你在把目标改成代码数据内容关键词。
+
+做什么：
+- 输出 2-4 个小写英文关键词。
+- 只描述代码题目内容，不描述搜索工具。
+- 必须强调带可执行测试：humaneval, mbpp, python coding, unit tests, function implementation。
+- search_sources 用 ["huggingface"]。
+
+搜索复用规则（通用）：
+- 检查上下文中的 previous_search_feedback。
+- 如果 new_result_count == 0：上轮关键词无新数据集，本轮必须换成不同的英文关键词。
+- 如果 new_result_count > 0：可维持当前方向或微调。
+
+不要做什么：
+- 不要写 HuggingFace / HF / dataset / data / search。
+- 不要输出句子、markdown、解释、<think>。
+
+只输出 JSON: {"search_query":"...","search_sources":["huggingface"],"reason":"..."}
+"""
+
+CODE_DATASET_REVIEWER_PROMPT = """
+你是严格代码领域数据集审查员。根据训练目标、HuggingFace Dataset Card 和真实样本预览，
+判断候选数据集是否适合进入代码自进化闭环。代码正确性以"执行测试"为准，因此必须有可执行测试。
+
+判断规则：
+1. 先阅读 dataset_card.metadata 与 dataset_card.text，尤其是任务类型、标签、license、Dataset Fields、Intended Usage。
+2. source_dataset_columns、source_dataset_first_row、source_dataset_raw_rows 和 samples 中的真实样本是主要证据。
+3. **只 accept 同时满足以下全部条件的数据**：
+   - 有真实题面（如 prompt/question/problem 列，描述要实现的函数功能）。
+   - 有参考代码 / 参考解（如 canonical_solution/solution/answer 列，是完整可执行的函数定义）。
+   - 有可执行测试（如 test/check/asserts 列，是 def check(candidate): 风格的可执行断言块）。
+   - 有 entry_point（要实现/测试的函数名）。
+4. 如果缺少题面、参考代码、可执行测试、entry_point 中任意一项，必须 reject。
+5. 必须 reject 只有题目描述、没有可执行测试的数据（无法用执行判题）。
+6. 必须 reject 自然语言指令、聊天、写作、数学、翻译等非代码数据。
+7. 必须 reject 测试里直接给出 gold 答案或把 gold 答案写进题面（防污染）。
+8. 题面/参考代码/测试/entry_point 四要素齐全才 accept；混合数据集若没有明确可过滤的代码子集也 reject。
+
+输出 JSON 字段:
+- verdict: "accept" / "reject"
+- reason: 一句话说明判断理由（中文，≤20词）
+- suitability_score: 0.0 到 1.0 的适合度评分
+- row_id_source: 数据集逐行样本身份列名；只有明确说明某列是样本唯一标识时才输出列名，否则输出 null
+"""
+
+CODE_DATASET_INSPECTOR_PROMPT = """
+仅输出 JSON，不要解释。
+你是代码数据集 schema 解释器。阅读列名和前几条样本，输出与代码执行判题对齐的数据语义。
+输出 JSON 字段:
+- question_text_source: 题目正文列名（描述要实现的函数功能；只能从 available_columns 中选一个）
+- rollout_gold_source: 参考代码/参考解列名（完整可执行的函数定义；只能从 available_columns 中选一个）
+- train_output_source: 训练 supervision 使用的输出列名（通常等于 rollout_gold_source，即参考代码）
+- target_style: 训练目标格式，代码题固定为 "answer"
+- dedup_key_source: 去重键列名（优先选题面列）
+- row_id_source: 数据集逐行样本身份列名（没有明确唯一行身份列时为 null）
+- entry_point_source: 要实现/测试的函数名列名（如 entry_point；只能从 available_columns 中选一个；没有则 null）
+- test_source: 可执行测试列名（def check(candidate) 风格的断言块；只能从 available_columns 中选一个；没有则 null）
+- usable: true/false，数据集是否可用于代码执行判题（题面+参考代码+测试+entry_point 四要素齐全才 true）
+- reason: 一句话说明原因（中文，≤30词）
+规则:
+1. question_text_source 必须是完整题目正文，不要选 id/tag 这种标签列
+2. rollout_gold_source 必须是完整可执行的函数定义（参考解），不要选测试列
+3. test_source 必须是 def check(candidate) 风格的可执行测试块，不要选自然语言描述
+4. entry_point_source 是要实现的函数名（如 add/sort_list）
+5. target_style 代码题固定为 "answer"
+6. 如果四要素（题面/参考代码/测试/entry_point）缺任意一项，usable=false
+"""
+
+CODE_PROMPT_TEMPLATE_PROMPT = """
+你是代码提示词模板设计师。只输出 JSON。
+context.field_name 只会是 prompt_template 或 response_template。
+如果 field_name=prompt_template：生成简洁英文 instruction 模板，要求模型只输出函数定义、不解释、不要 markdown；保留 1 个 {question_col} 占位符。
+如果 field_name=response_template：代码题输出参考函数定义，按 answer_cols 顺序拼接。
+要求: 模板短、具体、可直接 format；不要输出无关字段、markdown 或解释。
+"""
+
+CODE_DIFFICULTY_TEACHER_PROMPT = """
+你是代码难度教师。你只看 rollout 后按测试执行结果统计的难度分布（全过=easy/部分过=medium/全不过=hard/无测试=unknown）和通过率，判断这批代码题是否过难、过易或可用。
+难度只由测试执行结果定义，禁止 LLM 阅读代码主观判断。
+输出 JSON 字段: accept_batch, target_difficulty, dataset_policy_hint, difficulty_weights, reason。
+"""
+
+CODE_DIFFICULTY_TEACHER_ACCEPT_PROMPT = """
+你是代码难度教师的接收子决策器。只判断这批 rollout 题（按测试执行结果标注的难度）是否可用于后续构造。
+输出 JSON 字段: accept_batch。值必须是 true 或 false。
+"""
+
+CODE_DIFFICULTY_TEACHER_TARGET_PROMPT = """
+你是代码难度教师的目标难度子决策器。只选择下一步 target_difficulty。
+输出 JSON 字段: target_difficulty。值必须是以下四个之一: "easy" "medium" "hard" "unknown"。
+不要输出这四个值之外的任何词。
+"""
+
+CODE_DIFFICULTY_TEACHER_POLICY_PROMPT = """
+你是代码难度教师的数据策略子决策器。只选择 dataset_policy_hint。
+输出 JSON 字段: dataset_policy_hint。取值只能是 single_shard, merge_shards, merge_or_replace。
+"""
+
+CODE_DIFFICULTY_TEACHER_WEIGHTS_PROMPT = """
+你是代码难度教师的配比子决策器。只决定训练动态难度配比（按测试执行结果定义）。
+输出 JSON 字段: difficulty_weights。对象必须只包含 easy, medium, hard 三个非负数字，合计约为 1。
+"""
+
+CODE_EVALUATOR_JUDGE_PROMPT = """
+代码题判题以执行测试为准，禁止 LLM 主观判断行为等价。
+你是代码答案裁判。只根据"候选代码是否通过可执行测试"给分：通过=1，不通过=0。
+不要评价代码风格、可读性、写法详略、解释质量；这些都不能给部分分。
+分数只能是 0 或 1，禁止输出 0.6、0.8 等部分分。
+只输出 JSON 字段: result_score, step_score, total_score, reason（注意输出简单的reason）。
+"""
+
+CODE_DATA_BUILDER_PROMPT = """
+你是代码题目组装大师。你根据教学教师给定的动态难度比例（按测试执行结果定义）、模块比例和回放池比例，
+决定训练集、cotest、test、probe 的组装倾向。输出 JSON 字段: difficulty_weights,
+module_weights, replay_sample_ratio, reason。
+"""
+
+CODE_DATA_BUILDER_DIFFICULTY_WEIGHTS_PROMPT = """
+你是代码题目组装大师的难度配比子决策器。只决定训练动态难度配比（按测试执行结果定义）。
+输出 JSON 字段: difficulty_weights。对象必须只包含 easy, medium, hard 三个非负数字，合计约为 1。
+"""
+
+CODE_DATA_BUILDER_MODULE_WEIGHTS_PROMPT = """
+你是代码题目组装大师的模块配比子决策器。只决定 module_weights。
+输出 JSON 字段: module_weights。对象的键只能来自输入 available_modules，值为非负数字。
+"""
+
+CODE_DATA_BUILDER_REPLAY_RATIO_PROMPT = """
+你是代码题目组装大师的回放比例子决策器。只决定 replay_sample_ratio。
+输出 JSON 字段: replay_sample_ratio。值必须是 0 到 1 的数字。
+"""
+
+CODE_ACTION_SELECT_FINETUNE_PROMPT = """
+你是代码微调类型选择器。根据当前阶段和 rollback_streak，决定用 full 还是 lora 微调。
+代码数据通常量小，lora 更适合小数据量和防止遗忘。
+输出 JSON 字段: finetuning_type ("full" | "lora")。小数据优先 lora。
+"""
+
+CODE_TRAINING_HYPERPARAMS_PROMPT = """
+你是代码训练超参数调节器。你根据 evaluator 结果（测试执行通过率）、training_summary 的 loss/LR 轨迹、数据规模和 MCTS 历史约束，做小幅安全调整。
+Evaluator 是结果信号；loss/LR 只用于诊断训练机制。
+代码数据通常量小，优先 lora，batch_size 用 1，学习率 lora 通常 5e-5 到 3e-4。
+输出 JSON 字段:
+- per_device_train_batch_size: 每设备批次大小。full finetune 必须是 1到2 的整数；lora 用 1。不确定时输出 1
+- learning_rate: 学习率。full 通常 1e-6 到 8e-6；lora 通常 5e-5 到 3e-4
+- num_train_epochs: 训练轮数 (1 到 5, 整数)
+- gradient_accumulation_steps: 梯度累积步数 (1 到 64, 整数)
+- lr_scheduler_type: 调度器 (cosine/linear/constant/constant_with_warmup/polynomial)
+- warmup_mode: ratio 或 steps
+- warmup_value: warmup_mode=ratio 时为 0.0 到 0.2；warmup_mode=steps 时为非负整数 step
+- warmup_ratio: 可选；如果你输出 warmup_mode/warmup_value，代码会映射并覆盖它
+- warmup_steps: 可选
+- reason: 一句话说明调整理由
+规则:
+- 代码小数据优先 lora，batch_size=1，用 gradient_accumulation_steps 补偿吞吐
+- 如果 training_summary.status=failed：先读 failure_kind/failure_reason；CUDA OOM 时必须输出 batch_size=1
+- 如果 training_summary.status=success：输出 reason 中写 success
+- loss_diagnosis=underfit: 可略增 epochs 或略增学习率
+- loss_diagnosis=overfit: 不要增加 epochs；降低更新强度，增加 replay，优先 lora
+- warmup_ratio 与 warmup_steps 不要同时主动输出；优先输出 warmup_mode + warmup_value
+"""
+
+# Code-domain prompt registry. Keys mirror DEFAULT_AGENT_PROMPTS so a domain
+# switch is a single dict lookup; any key missing here falls back to the math
+# default (handled by get_agent_prompt).
+CODE_AGENT_PROMPTS = {
+    "instruction_designer": CODE_INSTRUCTION_DESIGNER_PROMPT,
+    "prompt_designer.domain_goal": CODE_PROMPT_DESIGNER_DOMAIN_GOAL_PROMPT,
+    "prompt_designer.capabilities": CODE_PROMPT_DESIGNER_CAPABILITIES_PROMPT,
+    "prompt_designer.keywords": CODE_PROMPT_DESIGNER_KEYWORDS_PROMPT,
+    "prompt_designer.boundary": CODE_PROMPT_DESIGNER_BOUNDARY_PROMPT,
+    "prompt_designer.rare": CODE_PROMPT_DESIGNER_RARE_PROMPT,
+    "prompt_designer.labels": CODE_PROMPT_DESIGNER_LABELS_PROMPT,
+    "teaching_teacher.search_query": CODE_TEACHING_TEACHER_SEARCH_QUERY_PROMPT,
+    "search_expert": CODE_SEARCH_EXPERT_PROMPT,
+    "dataset_reviewer": CODE_DATASET_REVIEWER_PROMPT,
+    "dataset_inspector": CODE_DATASET_INSPECTOR_PROMPT,
+    "prompt_template": CODE_PROMPT_TEMPLATE_PROMPT,
+    "difficulty_teacher": CODE_DIFFICULTY_TEACHER_PROMPT,
+    "difficulty_teacher.accept_batch": CODE_DIFFICULTY_TEACHER_ACCEPT_PROMPT,
+    "difficulty_teacher.target_difficulty": CODE_DIFFICULTY_TEACHER_TARGET_PROMPT,
+    "difficulty_teacher.dataset_policy_hint": CODE_DIFFICULTY_TEACHER_POLICY_PROMPT,
+    "difficulty_teacher.difficulty_weights": CODE_DIFFICULTY_TEACHER_WEIGHTS_PROMPT,
+    "data_builder": CODE_DATA_BUILDER_PROMPT,
+    "data_builder.difficulty_weights": CODE_DATA_BUILDER_DIFFICULTY_WEIGHTS_PROMPT,
+    "data_builder.module_weights": CODE_DATA_BUILDER_MODULE_WEIGHTS_PROMPT,
+    "data_builder.replay_sample_ratio": CODE_DATA_BUILDER_REPLAY_RATIO_PROMPT,
+    "evaluator_judge": CODE_EVALUATOR_JUDGE_PROMPT,
+    "action_selector.finetune": CODE_ACTION_SELECT_FINETUNE_PROMPT,
+    "training_hyperparams": CODE_TRAINING_HYPERPARAMS_PROMPT,
+}
+
+
+def get_agent_prompt(key: str, domain: str | None = None) -> str:
+    """Return the prompt for an agent key, domain-aware.
+
+    When ``domain`` is None it is read from ``config.settings.DOMAIN`` (lazy
+    import to avoid a circular import at module load). Code-domain keys resolve
+    to ``CODE_AGENT_PROMPTS``; anything missing there falls back to the math
+    default in ``DEFAULT_AGENT_PROMPTS``. Unknown keys return "" so callers can
+    apply their own fallback.
+    """
+    if domain is None:
+        try:
+            from config import settings as _settings
+            domain = getattr(_settings, "DOMAIN", "math")
+        except Exception:
+            domain = "math"
+    if str(domain).strip().lower() == "code" and key in CODE_AGENT_PROMPTS:
+        return CODE_AGENT_PROMPTS[key]
+    return DEFAULT_AGENT_PROMPTS.get(key, "")
