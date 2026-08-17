@@ -28,7 +28,7 @@ export ANSWER_VERIFIER_TYPE=auto
 # (13641-harrier). Never write candidate models / caches into the shared
 # /home quota.
 # ---------------------------------------------------------------------------
-WORKSPACE_DIR="${WORKSPACE_DIR:-/data2/13641-harrier}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-/data2/group_何向南/kang/13641-harrier}"
 export HF_HOME="${HF_HOME:-$WORKSPACE_DIR/huggingface}"
 export HF_DATASETS_CACHE="$HF_HOME/datasets"
 export HF_HUB_CACHE="$HF_HOME/hub"
@@ -92,7 +92,7 @@ export CODE_EXEC_CACHE_ENABLED="${CODE_EXEC_CACHE_ENABLED:-1}"
 # ---------------------------------------------------------------------------
 # Benchmark: local code smoke dataset (train.json / test.json)
 # ---------------------------------------------------------------------------
-export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-/data2/13641-harrier/EvoChampion/data/code_smoke}"
+export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-/data2/group_何向南/kang/13641-harrier/EvoChampion/data/code_smoke}"
 export BENCHMARK_SPLIT=train
 export BENCHMARK_EVAL_SPLIT=test
 export BENCHMARK_QUESTION_KEY=question

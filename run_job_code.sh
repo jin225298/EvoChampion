@@ -4,13 +4,13 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=12:00:00
 #SBATCH --job-name=evocode
-#SBATCH --output=/data2/13641-harrier/EvoChampion/log/code_job_%j.out
-#SBATCH --error=/data2/13641-harrier/EvoChampion/log/code_job_%j.err
+#SBATCH --output=/data2/group_何向南/kang/13641-harrier/EvoChampion/log/code_job_%j.out
+#SBATCH --error=/data2/group_何向南/kang/13641-harrier/EvoChampion/log/code_job_%j.err
 #SBATCH --mem=128G
 
 set -Eeuo pipefail
 
-PROJECT_DIR="/data2/13641-harrier/EvoChampion"
+PROJECT_DIR="/data2/group_何向南/kang/13641-harrier/EvoChampion"
 ENV_FILE="${PROJECT_DIR}/.env"
 RUN_SCRIPT="${PROJECT_DIR}/run_code.sh"
 CONDA_SH="/home/kang/miniconda3/etc/profile.d/conda.sh"
