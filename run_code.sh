@@ -32,6 +32,7 @@ export ANSWER_VERIFIER_TYPE="${ANSWER_VERIFIER_TYPE:-auto}"
 # /data2, never under the /home quota. Overridable for the server's group path.
 export DATA2_BASE="${DATA2_BASE:-/data2/group_何向南/kang/agents-evolve-formal-new/13644-estuary}"
 export HF_HOME="${HF_HOME:-$DATA2_BASE/huggingface}"
+export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 export HF_DATASETS_CACHE="$HF_HOME/datasets"
 export HF_HUB_CACHE="$HF_HOME/hub"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
@@ -122,7 +123,7 @@ export CODE_EXEC_CPU_SECONDS="${CODE_EXEC_CPU_SECONDS:-15}"
 export SEARCH_TIMEOUT_SECONDS=60
 export SEARCH_DATASET_REPO_LIMIT="${SEARCH_DATASET_REPO_LIMIT:-8}"
 export SEARCH_FALLBACK_MODE="${SEARCH_FALLBACK_MODE:-predefined}"
-export SEARCH_FALLBACK_DATASETS="${SEARCH_FALLBACK_DATASETS:-/home/kang/agents-evolve-formal-new/data/code_smoke::train}"
+export SEARCH_FALLBACK_DATASETS="${SEARCH_FALLBACK_DATASETS:-$SCRIPT_DIR/data/code_smoke::train}"
 export USE_HFD_DATASET_DOWNLOAD="${USE_HFD_DATASET_DOWNLOAD:-0}"
 
 # Inference: vLLM for fast batched inference.
