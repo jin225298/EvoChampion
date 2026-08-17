@@ -141,7 +141,7 @@ def search_hf_datasets(
         if Path(BENCHMARK_DATASET_ID).expanduser().exists():
             local_code_refs.append({
                 "dataset_id": BENCHMARK_DATASET_ID,
-                "source": "local_code",
+                "source": "huggingface",
                 "subset": None,
                 "split": BENCHMARK_SPLIT or "train",
             })
