@@ -39,6 +39,7 @@ from src.tools.agent_prompts import (
     PROMPT_DESIGNER_RARE_PROMPT,         # leaf 5: 稀有/长尾信号
     PROMPT_DESIGNER_LABELS_PROMPT,       # leaf 6+7: 分类标签 + 标签说明
     INSTRUCTION_DESIGNER_PROMPT,         # leaf 8: 指令前缀设计
+    code_prompt_for,                     # DOMAIN=code 时切换到代码领域提示词
 )
 from src.tools.llm_decision import decide_json_leaf
 
@@ -111,7 +112,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ①: 领域目标（英文短语，10 词以内） ──
     raw_goal, ok = decide_json_leaf(
         agent_name="prompt_designer.domain_goal",
-        prompt=PROMPT_DESIGNER_DOMAIN_GOAL_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_DOMAIN_GOAL_PROMPT),
         context={"user_goal": goal, "field_name": "domain_goal"},
         field_name="domain_goal",
         fallback_value=fallback["domain_goal"],
@@ -125,7 +126,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ②: 能力点列表（3~6 个英文能力点） ──
     raw_caps, ok = decide_json_leaf(
         agent_name="prompt_designer.capabilities",
-        prompt=PROMPT_DESIGNER_CAPABILITIES_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_CAPABILITIES_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "target_capabilities"},
         field_name="target_capabilities",
         fallback_value=fallback["target_capabilities"],
@@ -139,7 +140,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ③: HF 搜索关键词（5~10 个英文关键词） ──
     raw_kw, ok = decide_json_leaf(
         agent_name="prompt_designer.keywords",
-        prompt=PROMPT_DESIGNER_KEYWORDS_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_KEYWORDS_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "search_keywords"},
         field_name="search_keywords",
         fallback_value=fallback["search_keywords"],
@@ -153,7 +154,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ④: 边界信号（何时需要调整策略） ──
     raw_b, ok = decide_json_leaf(
         agent_name="prompt_designer.boundary",
-        prompt=PROMPT_DESIGNER_BOUNDARY_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_BOUNDARY_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "boundary_signals"},
         field_name="boundary_signals",
         fallback_value=fallback["boundary_signals"],
@@ -167,7 +168,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ⑤: 稀有/长尾信号 ──
     raw_r, ok = decide_json_leaf(
         agent_name="prompt_designer.rare",
-        prompt=PROMPT_DESIGNER_RARE_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_RARE_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "rare_signals"},
         field_name="rare_signals",
         fallback_value=fallback["rare_signals"],
@@ -181,7 +182,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ⑥: 分类标签列表 ──
     raw_labels, ok = decide_json_leaf(
         agent_name="prompt_designer.labels",
-        prompt=PROMPT_DESIGNER_LABELS_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_LABELS_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "classifier_labels"},
         field_name="classifier_labels",
         fallback_value=fallback["classifier_labels"],
@@ -195,7 +196,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ⑦: 分类标签说明（依赖⑥的输出） ──
     raw_notes, ok = decide_json_leaf(
         agent_name="prompt_designer.labels",
-        prompt=PROMPT_DESIGNER_LABELS_PROMPT,
+        prompt=code_prompt_for(PROMPT_DESIGNER_LABELS_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "classifier_labels": result.get("classifier_labels", fallback["classifier_labels"]), "field_name": "classifier_label_notes"},
         field_name="classifier_label_notes",
         fallback_value=fallback["classifier_label_notes"],
@@ -208,7 +209,7 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
     # ── leaf ⑧: 指令前缀（基于领域目标动态生成） ──
     raw_prefix, ok = decide_json_leaf(
         agent_name="instruction_designer",
-        prompt=INSTRUCTION_DESIGNER_PROMPT,
+        prompt=code_prompt_for(INSTRUCTION_DESIGNER_PROMPT),
         context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "instruction_prefix"},
         field_name="instruction_prefix",
         fallback_value=fallback["instruction_prefix"],

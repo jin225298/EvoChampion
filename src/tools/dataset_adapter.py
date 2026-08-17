@@ -940,6 +940,10 @@ def normalize_item(
 
     row_id = _row_id_from_item(item, schema, idx)
 
+    # Code-domain fields are passed through so the judge can execute the tests.
+    test_code = str(item.get("test") or item.get("tests") or item.get("test_code") or "").strip()
+    entry_point = str(item.get("entry_point") or item.get("function_name") or "").strip()
+
     return {
         "question_id": _question_id_for_row(
             dataset_id,
@@ -954,6 +958,8 @@ def normalize_item(
         "target_style": target_style,
         "evaluation_method": evaluation_method,
         "needs_judge": evaluation_method == "llm_judge",
+        "test": test_code,
+        "entry_point": entry_point,
         "dedup_key": dedup_key or question_text,
         "source_dataset_id": dataset_id,
         "source_dataset_row_id": row_id,

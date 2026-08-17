@@ -76,6 +76,13 @@ from src.models.messages import (
     TrainResultPayload,
 )
 from src.models.state import EvoState
+from src.tools.code_execution import (
+    IS_CODE_DOMAIN,
+    is_code_item,
+    judge_chunk_solutions,
+    judge_solution,
+    test_code_for_item,
+)
 from src.tools.model_runner import judge_answer, run_model_batch
 from src.tools.difficulty_tagger import tag_questions_by_pass_rate
 from src.tools.agent_prompts import EVALUATOR_JUDGE_PROMPT
@@ -380,8 +387,9 @@ def evaluate_old_mastered_set(candidate_model_path: str, mastered_set_path: str)
     predictions = _run_eval_batch(candidate_model_path, prompts)
 
     errors = 0
-    for pred, gold in zip(predictions, gold_answers):
-        if not judge_answer(pred, gold):
+    for i, (pred, gold) in enumerate(zip(predictions, gold_answers)):
+        item = eval_questions[i] if i < len(eval_questions) else None
+        if not judge_solution(pred, gold, item, judge_answer):
             errors += 1
 
     error_rate = errors / total
@@ -426,16 +434,18 @@ def evaluate_new_skill_gain(
     # Batch inference for champion
     if champion_model_path:
         before_preds = _run_eval_batch(champion_model_path, prompts)
-        for pred, gold in zip(before_preds, gold_answers):
-            if judge_answer(pred, gold):
+        for i, (pred, gold) in enumerate(zip(before_preds, gold_answers)):
+            item = eval_items[i] if i < len(eval_items) else None
+            if judge_solution(pred, gold, item, judge_answer):
                 before_correct += 1
             before_total += 1
 
     # Batch inference for candidate
     if candidate_model_path:
         after_preds = _run_eval_batch(candidate_model_path, prompts)
-        for pred, gold in zip(after_preds, gold_answers):
-            if judge_answer(pred, gold):
+        for i, (pred, gold) in enumerate(zip(after_preds, gold_answers)):
+            item = eval_items[i] if i < len(eval_items) else None
+            if judge_solution(pred, gold, item, judge_answer):
                 after_correct += 1
             after_total += 1
 
@@ -493,7 +503,7 @@ def evaluate_probe_set_detailed(
         question_difficulties,
         all_questions,
     ):
-        is_correct = judge_answer(pred, gold)
+        is_correct = judge_solution(pred, gold, question, judge_answer)
         if is_correct:
             correct += 1
         else:
@@ -681,6 +691,9 @@ def _reference_solution_for_item(item: dict | None) -> str:
 def _evaluation_method_for_item(item: dict | None) -> str:
     if not isinstance(item, dict):
         return "gold"
+    if is_code_item(item) or (IS_CODE_DOMAIN and test_code_for_item(item)):
+        # Code items are judged by executed tests, never by an LLM.
+        return "gold"
     raw = str(item.get("evaluation_method") or item.get("judge_mode") or "").strip().lower()
     raw = raw.replace("-", "_")
     if raw in {"llm_judge", "llm_as_judge", "llmasjudge"}:
@@ -700,6 +713,8 @@ def _judge_eval_prediction(
     allow_llm_judge: bool = True,
 ) -> bool:
     """Judge one eval prediction using the cleaned dataset's judge label."""
+    if item is not None and (is_code_item(item) or (IS_CODE_DOMAIN and test_code_for_item(item))):
+        return judge_solution(prediction, gold_answer, item, judge_answer)
     if _evaluation_method_for_item(item) == "llm_judge":
         if USE_LLM_AS_JUDGE and allow_llm_judge:
             return _is_correct_by_score(_llm_judge_score(
@@ -1626,10 +1641,12 @@ def _run_frozen_multi_rollout(
     for idx in range(len(frozen_prompts)):
         gold = frozen_gold[idx] if idx < len(frozen_gold) else ""
         chunk = predictions[idx * rollout_times:(idx + 1) * rollout_times]
-        correct_count = sum(1 for pred in chunk if judge_answer(pred, gold))
+        item = questions[idx] if questions and idx < len(questions) else None
+        chunk_correct = judge_chunk_solutions(chunk, gold, item, judge_answer)
+        correct_count = sum(1 for c in chunk_correct if c)
         stats[correct_count] = stats.get(correct_count, 0) + 1
         if trace_id:
-            item = questions[idx] if questions and idx < len(questions) else {}
+            item = item or {}
             difficulty = (
                 difficulties[idx]
                 if difficulties is not None and idx < len(difficulties)
@@ -1646,7 +1663,7 @@ def _run_frozen_multi_rollout(
                     prompt=frozen_prompts[idx],
                     gold_answer=gold,
                     prediction=pred,
-                    correct=judge_answer(pred, gold),
+                    correct=chunk_correct[rollout_idx] if rollout_idx < len(chunk_correct) else False,
                     max_new_tokens=int(EVAL_MAX_NEW_TOKENS),
                     temperature=ROLLOUT_TEMPERATURE,
                     top_p=ROLLOUT_TOP_P,

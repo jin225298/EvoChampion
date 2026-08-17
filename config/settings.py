@@ -38,6 +38,16 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =============================================================================
+# Domain Configuration
+# =============================================================================
+# "code" enables the code self-evolution loop (test-execution judging, code
+# prompts, code datasets). Any other value keeps the math loop unchanged.
+DOMAIN = os.getenv("DOMAIN", "").strip().lower()
+IS_CODE_DOMAIN = DOMAIN == "code"
+ANSWER_VERIFIER_TYPE = os.getenv("ANSWER_VERIFIER_TYPE", "").strip().lower()
+
+
+# =============================================================================
 # Generic Benchmark Configuration
 # =============================================================================
 # The benchmark dataset used for evaluation (e.g. "openai/gsm8k", "MMLU/elementary_mathematics")

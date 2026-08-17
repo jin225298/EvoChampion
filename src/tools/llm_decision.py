@@ -11,6 +11,7 @@ from config.settings import (
     USE_LLM_AGENTS,
     get_session_dir,
 )
+from src.tools.agent_prompts import code_prompt_for
 from src.tools.context_compactor import compact_context
 from src.tools.model_runner import run_model_batch
 
@@ -800,6 +801,11 @@ def _log_ab_comparison(
 
 def prompt_for_agent(state: dict[str, Any], agent_name: str, default_prompt: str) -> str:
     """从提示词设计师产物中读取提示词；没有则使用默认框架。"""
+    # Domain-aware default: under DOMAIN=code, swap the math default for its
+    # code-domain variant. This covers locked agents (evaluator_judge,
+    # parameter_master) which bypass the pack, and the fallback path for
+    # mutable agents whose pack entry is missing.
+    default_prompt = code_prompt_for(default_prompt)
     if agent_name in _CRITICAL_PROMPT_AGENTS or agent_name.startswith("parameter_master"):
         return default_prompt
     pack = state.get("agent_prompt_pack", {}) if isinstance(state, dict) else {}

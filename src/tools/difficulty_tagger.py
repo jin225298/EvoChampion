@@ -1,3 +1,4 @@
+import os
 from collections import Counter
 from typing import Any
 
@@ -9,6 +10,7 @@ from config.settings import (
     DIFFICULTY_LATE_ROUND,       # 从第几轮开始视为"后期"（使用更宽松的阈值）
     ROLLOUT_MAX_NEW_TOKENS,
 )
+from src.tools.code_execution import code_judge_answer_bool
 from src.tools.inference_trace import build_inference_trace_row, write_inference_trace_rows
 from src.tools.llm_judge import judge_predictions_with_llm_batch
 from src.tools.model_runner import judge_answer, run_model_batch
@@ -16,9 +18,27 @@ from src.tools.question_fields import add_processed_question_fields
 
 
 _THRESHOLD_KEYS = ("easy_min", "medium_min")
-ROLLOUT_ANSWER_ONLY_SUFFIX = "\n\nOnly output the final answer in \\boxed{}."
+_DOMAIN_CODE = os.getenv("DOMAIN", "").strip().lower() == "code"
+ROLLOUT_ANSWER_ONLY_SUFFIX = (
+    "\n\nWrite only the Python code inside a single ```python code block. "
+    "No explanation, no tests, no prose."
+    if _DOMAIN_CODE
+    else "\n\nOnly output the final answer in \\boxed{}."
+)
 EVALUATION_METHOD_GOLD = "gold"
 EVALUATION_METHOD_LLM_JUDGE = "llm_judge"
+
+
+def _item_is_code(item: Any) -> bool:
+    """True when the question carries an executable test set."""
+    if item is None:
+        return False
+    test = str(_field(item, "test", "tests", "test_code", default="") or "").strip()
+    if not test:
+        return False
+    if _field(item, "entry_point", "function_name", default=""):
+        return True
+    return "def check(" in test
 
 
 def _rollout_prompt(question_text: str) -> str:
@@ -256,6 +276,8 @@ def _gold_answer_for_item(item: Any) -> str:
 
 
 def _evaluation_method_for_item(item: Any, gold_answer: str, reference_solution: str) -> str:
+    if _item_is_code(item):
+        return EVALUATION_METHOD_GOLD  # code: judged by executed tests, never by LLM
     raw = str(_field(item, "evaluation_method", "judge_mode", default="") or "").strip().lower()
     if raw == EVALUATION_METHOD_LLM_JUDGE or _truthy(_field(item, "needs_judge", default=False)):
         return EVALUATION_METHOD_LLM_JUDGE
@@ -275,6 +297,7 @@ def _judge_predictions_batch(
     evaluation_methods: list[str],
     trace_id: str,
     round_id: int | None,
+    items: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     judgements: list[dict[str, Any]] = [
         {
@@ -289,6 +312,17 @@ def _judge_predictions_batch(
     for idx, prediction in enumerate(predictions):
         method = evaluation_methods[idx] if idx < len(evaluation_methods) else EVALUATION_METHOD_GOLD
         gold_answer = gold_answers[idx] if idx < len(gold_answers) else ""
+        item = items[idx] if items is not None and idx < len(items) else None
+        if item is not None and _item_is_code(item):
+            # Code difficulty is defined by executed tests only.
+            correct = code_judge_answer_bool(prediction, gold_answer, item)
+            judgements[idx] = {
+                "correct": correct,
+                "score": 1.0 if correct else 0.0,
+                "reason": "test execution",
+                "source": "code_execution",
+            }
+            continue
         if method == EVALUATION_METHOD_LLM_JUDGE:
             llm_indices.append(idx)
             continue
@@ -405,6 +439,7 @@ def tag_questions_by_pass_rate(
             evaluation_methods=evaluation_methods,
             trace_id=trace_id,
             round_id=round_id,
+            items=questions,
         )
         thinking_indices = [
             idx
@@ -431,6 +466,7 @@ def tag_questions_by_pass_rate(
                 evaluation_methods=[evaluation_methods[idx] for idx in thinking_indices],
                 trace_id=trace_id,
                 round_id=round_id,
+                items=[questions[idx] for idx in thinking_indices],
             )
             final_thinking_judgements = {
                 original_idx: judgement

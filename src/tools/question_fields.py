@@ -23,7 +23,29 @@ PROCESSED_QUESTION_FIELDS = (
     "target_style",
     "evaluation_method",
     "needs_judge",
+    "test",
+    "entry_point",
 )
+
+
+def _text_or_none(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def is_code_question(item: Any) -> bool:
+    """True when the item carries an executable test set (code domain)."""
+    test = _text_or_none(get_question_field(item, "test", ""))
+    if not test:
+        test = _text_or_none(get_question_field(item, "tests", ""))
+    if not test:
+        test = _text_or_none(get_question_field(item, "test_code", ""))
+    if not test:
+        return False
+    if get_question_field(item, "entry_point", "") or get_question_field(item, "function_name", ""):
+        return True
+    return "def check(" in test
 
 
 def get_question_field(item: Any, name: str, default: Any = None) -> Any:
@@ -46,14 +68,19 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
     )
     if target_style == TARGET_STYLE_ANSWER and not train_output:
         train_output = rollout_gold_answer
+    code_question = is_code_question(item)
     raw_method = text_or_empty(get_question_field(item, "evaluation_method", ""))
-    evaluation_method = raw_method if raw_method in {"gold", "llm_judge"} else ""
+    evaluation_method = raw_method if raw_method in {"gold", "llm_judge", "code_execution"} else ""
     raw_needs_judge = get_question_field(item, "needs_judge", False)
     needs_judge = raw_needs_judge if isinstance(raw_needs_judge, bool) else str(raw_needs_judge).lower() in {
         "1",
         "true",
         "yes",
     }
+    if code_question:
+        # Code questions are judged by executed tests; never by LLM.
+        evaluation_method = "code_execution"
+        needs_judge = False
     if not evaluation_method:
         evaluation_method = "gold" if rollout_gold_answer or gold_answer else "llm_judge" if train_output else "gold"
     needs_judge = bool(needs_judge or evaluation_method == "llm_judge")
@@ -63,6 +90,8 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
         "target_style": target_style,
         "evaluation_method": evaluation_method,
         "needs_judge": needs_judge,
+        "test": _text_or_none(get_question_field(item, "test", "")) or _text_or_none(get_question_field(item, "tests", "")) or _text_or_none(get_question_field(item, "test_code", "")),
+        "entry_point": _text_or_none(get_question_field(item, "entry_point", "")) or _text_or_none(get_question_field(item, "function_name", "")),
     }
 
 

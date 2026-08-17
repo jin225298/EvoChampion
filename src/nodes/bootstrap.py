@@ -59,6 +59,7 @@ from src.models.messages import (
     RoutedMessage,
 )
 from src.models.state import EvoState
+from src.tools.code_execution import judge_solution
 from src.tools.model_runner import warmup_model
 from src.tools.model_runner import judge_answer
 from src.tools.question_registry import mark_questions_active_holdout, mark_questions_probe_holdout
@@ -220,6 +221,11 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "source_dataset_requested_split": split,
         "module": subject,
         "dynamic_difficulty": str(item.get("level", "")),
+        # Code-domain fields: carried through so the test-execution judge can
+        # drive the candidate against the reference tests. No gold answer is
+        # ever injected into the harness (anti-contamination).
+        "test": str(item.get("test") or item.get("tests") or item.get("test_code") or ""),
+        "entry_point": str(item.get("entry_point") or item.get("function_name") or ""),
     }
 
 
@@ -408,11 +414,15 @@ def _evaluate_base_model_frozen(
 
     if checkpoint.get("base_frozen_error_rate") is not None:
         return float(checkpoint["base_frozen_error_rate"])
-    frozen_prompts, frozen_gold, _questions = _load_probe_items_for_eval(frozen_probe_path)
+    frozen_prompts, frozen_gold, frozen_questions = _load_probe_items_for_eval(frozen_probe_path)
     if not frozen_prompts:
         return None
     predictions = warmup_and_eval_batch(champion_model_path, frozen_prompts)
-    correct = sum(1 for p, g in zip(predictions, frozen_gold) if judge_answer(p, g))
+    correct = sum(
+        1
+        for i, (p, g) in enumerate(zip(predictions, frozen_gold))
+        if judge_solution(p, g, frozen_questions[i] if i < len(frozen_questions) else None, judge_answer)
+    )
     error_rate = 1.0 - correct / len(frozen_gold) if frozen_gold else None
     print(f"[bootstrap] Base model frozen probe 1-shot: {correct}/{len(frozen_gold)} correct, error_rate={error_rate:.4f}")
 

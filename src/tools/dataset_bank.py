@@ -114,6 +114,9 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "target_style": "answer",
         "source_dataset_id": f"{BENCHMARK_DATASET_ID}/{split}",
         "source_dataset_row_id": str(idx),
+        # Code-domain fields carried through for test-execution judging.
+        "test": str(item.get("test") or item.get("tests") or item.get("test_code") or ""),
+        "entry_point": str(item.get("entry_point") or item.get("function_name") or ""),
     }
 
 
