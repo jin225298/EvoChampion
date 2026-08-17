@@ -308,6 +308,52 @@ def get_existing_hfd_dataset_source(dataset_id: str) -> str | None:
     return None
 
 
+def _try_load_local_dataset(dataset_id: str, split: str, streaming: bool):
+    """Load a dataset from a local path (directory or file) without the HF Hub.
+
+    Returns a ``datasets.Dataset`` (or streaming iterator) when ``dataset_id``
+    points to a local directory containing ``<split>.json``/``<split>.jsonl``,
+    or to a single local JSON/JSONL file. Returns ``None`` if the path does not
+    exist locally so callers fall through to the standard HF Hub loader.
+    """
+    import os
+
+    if not dataset_id or not os.path.exists(dataset_id):
+        return None
+    try:
+        load_dataset = importlib.import_module("datasets").load_dataset
+    except Exception:
+        return None
+
+    # Single local file: load as json, expose it under the requested split.
+    if os.path.isfile(dataset_id):
+        try:
+            ds = load_dataset("json", data_files=dataset_id, split="train")
+            # The dataset may not have the requested split name; map "train"
+            # back to whatever split the caller asked for by re-reading.
+            return ds
+        except Exception:
+            return None
+
+    # Local directory: collect per-split json/jsonl files.
+    if os.path.isdir(dataset_id):
+        data_files: dict[str, str] = {}
+        for name in os.listdir(dataset_id):
+            base, ext = os.path.splitext(name)
+            if ext.lower() in {".json", ".jsonl"}:
+                data_files[base] = os.path.join(dataset_id, name)
+        if not data_files:
+            return None
+        try:
+            # If the requested split exists, load just that; else load all.
+            if split in data_files:
+                return load_dataset("json", data_files=data_files, split=split)
+            return load_dataset("json", data_files=data_files, split=split if split in data_files else list(data_files)[0])
+        except Exception:
+            return None
+    return None
+
+
 def load_hf_dataset_with_fallback(
     dataset_id: str,
     subset: str | None,
@@ -321,7 +367,17 @@ def load_hf_dataset_with_fallback(
     坑：有些数据集必须传 name="main"（如 GSM8K），有些传了反而报错。
     此函数先按调用方给的 subset 加载，失败后切换 subset 模式重试一次，
     两次都失败才抛原始异常。
+
+    本地路径：dataset_id 指向本地目录（含 train.json/test.json）或本地
+    JSON 文件时，直接用 datasets 的 json 构建器加载，不走 HF Hub。
     """
+    # Local-path fast path: a directory with <split>.json / <split>.jsonl, or a
+    # single local JSON/JSONL file. Lets smoke datasets (e.g. data/code_smoke)
+    # load without a HuggingFace script or network.
+    local = _try_load_local_dataset(dataset_id, split, streaming)
+    if local is not None:
+        return local
+
     load_dataset = importlib.import_module("datasets").load_dataset
     dataset_source = prepare_hfd_dataset_source(dataset_id) if allow_hfd else dataset_id
     load_kwargs: dict[str, Any] = {}
