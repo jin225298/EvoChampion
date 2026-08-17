@@ -76,9 +76,11 @@ else
   log "environment file not found at $ENV_FILE; using script defaults"
 fi
 
-# Cluster-reachable proxy so GPU nodes can reach Hugging Face / dataset APIs.
-export http_proxy="${http_proxy:-http://<PROXY_IP>:1081}"
-export https_proxy="${https_proxy:-http://<PROXY_IP>:1081}"
+# Cluster-reachable proxy for Hugging Face / dataset access. Uses http_proxy /
+# https_proxy from the environment or .env when set; otherwise leaves them unset
+# (set http_proxy/https_proxy in .env if the node needs a proxy for HF).
+export http_proxy="${http_proxy:-}"
+export https_proxy="${https_proxy:-}"
 export HTTP_PROXY="$http_proxy"
 export HTTPS_PROXY="$https_proxy"
 export PYTHONUNBUFFERED=1
