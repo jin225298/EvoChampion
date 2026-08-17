@@ -53,6 +53,14 @@ export HF_HUB_DOWNLOAD_TIMEOUT=180
 export REQUESTS_CONNECT_TIMEOUT=30
 export REQUESTS_READ_TIMEOUT=180
 
+# Slurm compute nodes do not run the login-node localhost proxy (127.0.0.1:1081).
+# hf-mirror.com is reachable directly from the cluster, so clear any inherited
+# localhost proxy to avoid routing downloads through a non-existent proxy.
+if [[ "${http_proxy:-}" == *127.0.0.1* || "${http_proxy:-}" == *localhost* ]]; then
+  export http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY=""
+  echo "[run_code] cleared localhost proxy; using direct connection to $HF_ENDPOINT"
+fi
+
 # ---------------------------------------------------------------------------
 # Search: code datasets that ship executable tests (HumanEval / MBPP style).
 # ---------------------------------------------------------------------------
