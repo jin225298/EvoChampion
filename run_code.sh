@@ -18,6 +18,10 @@ source "$CONDA_SH"
 conda activate "$CONDA_ENV"
 set -u
 
+# Resolve paths relative to this script so any clone works (the repo ships its
+# own data/code_smoke and run_job_code.sh wrapper).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ── Domain selector (switches data admission, rollout judging, evaluation,
 #     and prompts to the code-domain execution-based loop) ──
 export DOMAIN="${DOMAIN:-code}"
@@ -43,9 +47,9 @@ export HF_HUB_DOWNLOAD_TIMEOUT=180
 export REQUESTS_CONNECT_TIMEOUT=30
 export REQUESTS_READ_TIMEOUT=180
 
-# Local code smoke dataset (ships in the repo at data/code_smoke). On the
-# server this resolves to /home/kang/agents-evolve-formal-new/data/code_smoke.
-export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-/home/kang/agents-evolve-formal-new/data/code_smoke}"
+# Local code smoke dataset (ships in the repo at data/code_smoke). Defaults to
+# this clone's own copy; override with BENCHMARK_DATASET_ID to point elsewhere.
+export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-$SCRIPT_DIR/data/code_smoke}"
 export BENCHMARK_SPLIT="${BENCHMARK_SPLIT:-train}"
 export BENCHMARK_EVAL_SPLIT="${BENCHMARK_EVAL_SPLIT:-test}"
 export BENCHMARK_QUESTION_KEY="${BENCHMARK_QUESTION_KEY:-question}"

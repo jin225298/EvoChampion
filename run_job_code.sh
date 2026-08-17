@@ -4,16 +4,17 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=04:00:00
 #SBATCH --job-name=evochampion-code
-#SBATCH --output=/home/kang/agents-evolve-formal-new/log/code_job_%j.out
-#SBATCH --error=/home/kang/agents-evolve-formal-new/log/code_job_%j.err
+#SBATCH --output=/data2/group_何向南/kang/13644-estuary/log/code_job_%j.out
+#SBATCH --error=/data2/group_何向南/kang/13644-estuary/log/code_job_%j.err
 #SBATCH --mem=128G
 
 set -Eeuo pipefail
 
 # Code-domain smoke run. Wraps run_code.sh with the same dry-run / sbatch
-# contract as run_job.sh. All paths default to the server deployment but are
-# overridable for local validation.
-PROJECT_DIR="${PROJECT_DIR:-/home/kang/agents-evolve-formal-new}"
+# contract as run_job.sh. PROJECT_DIR defaults to this script's own directory so
+# any clone is self-contained; override for a different deployment.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
 ENV_FILE="${PROJECT_DIR}/.env"
 RUN_SCRIPT="${PROJECT_DIR}/run_code.sh"
 CONDA_SH="${CONDA_SH:-/home/kang/miniconda3/etc/profile.d/conda.sh}"
