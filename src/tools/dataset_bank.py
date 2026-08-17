@@ -30,6 +30,9 @@ from config.settings import (
     BENCHMARK_SPLIT,
     BENCHMARK_SUBSET,
     GLOBAL_PROBE_SIZE,
+    BENCHMARK_TEST_KEY,
+    BENCHMARK_ENTRY_POINT_KEY,
+    IS_CODE_DOMAIN,
 )
 from src.tools.dataset_adapter import load_hf_dataset_with_fallback
 
@@ -105,13 +108,22 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         or item.get("target")
         or ""
     )
+    # Code-domain fields: executable test + entry point, carried through the
+    # bank/probe so the evaluator can execute candidate code. train_output is
+    # the reference code (gold_answer) so SFT has supervision.
+    test_code = str(item.get(BENCHMARK_TEST_KEY, "") or "") if IS_CODE_DOMAIN else ""
+    entry_point = str(item.get(BENCHMARK_ENTRY_POINT_KEY, "") or "") if IS_CODE_DOMAIN else ""
     return {
         "question_id": f"{BENCHMARK_DATASET_ID.replace('/', '_')}_{split}_{idx}",
         "question_text": question_text,
         "gold_answer": gold_answer,
         "rollout_gold_answer": gold_answer,
-        "train_output": "",
+        "train_output": gold_answer if IS_CODE_DOMAIN else "",
         "target_style": "answer",
+        "evaluation_method": "code_exec" if IS_CODE_DOMAIN else "gold",
+        "needs_judge": False,
+        "test": test_code,
+        "entry_point": entry_point,
         "source_dataset_id": f"{BENCHMARK_DATASET_ID}/{split}",
         "source_dataset_row_id": str(idx),
     }
@@ -226,6 +238,10 @@ def build_probe_from_bank(rows: list[dict]) -> dict[str, list[dict]]:
             "rollout_gold_answer": row.get("rollout_gold_answer") or row.get("gold_answer", ""),
             "train_output": row.get("train_output", ""),
             "target_style": row.get("target_style", "answer"),
+            "evaluation_method": row.get("evaluation_method", "gold"),
+            "needs_judge": row.get("needs_judge", False),
+            "test": row.get("test", ""),
+            "entry_point": row.get("entry_point", ""),
             "source_dataset_id": row.get("source_dataset_id", f"{BENCHMARK_DATASET_ID}/{BENCHMARK_SPLIT}"),
             "source_dataset_row_id": row.get("source_dataset_row_id"),
             "module": row.get("module", "unknown"),

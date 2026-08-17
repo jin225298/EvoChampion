@@ -29,6 +29,9 @@ from config.settings import (
     BENCHMARK_ANSWER_KEY,
     BENCHMARK_DATASET_ID,
     BENCHMARK_QUESTION_KEY,
+    BENCHMARK_TEST_KEY,
+    BENCHMARK_ENTRY_POINT_KEY,
+    IS_CODE_DOMAIN,
     CANDIDATE_MODEL_DIR,
     CHAMPION_MODEL_PATH,
     EVAL_MAX_NEW_TOKENS,
@@ -206,6 +209,11 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
     if not subject:
         from src.tools.dataset_bank import infer_module
         subject = infer_module(question_text)
+    # Code-domain fields: executable test + entry point, carried through the
+    # probe/frozen sets so the evaluator can execute candidate code.
+    test_code = str(item.get(BENCHMARK_TEST_KEY, "") or "") if IS_CODE_DOMAIN else ""
+    entry_point = str(item.get(BENCHMARK_ENTRY_POINT_KEY, "") or "") if IS_CODE_DOMAIN else ""
+    evaluation_method = "code_exec" if IS_CODE_DOMAIN else "gold"
     return {
         "question_id": f"{safe_id}_{split}_{idx}",
         "question_text": question_text,
@@ -213,6 +221,10 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "rollout_gold_answer": gold_answer,
         "train_output": gold_answer,
         "target_style": "answer",
+        "evaluation_method": evaluation_method,
+        "needs_judge": False,
+        "test": test_code,
+        "entry_point": entry_point,
         "source_dataset_id": f"{BENCHMARK_DATASET_ID}/{split}",
         "source_dataset_row_id": str(idx),
         "source_dataset_split": split,
