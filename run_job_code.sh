@@ -11,10 +11,11 @@
 set -Eeuo pipefail
 
 # Code-domain smoke run. Wraps run_code.sh with the same dry-run / sbatch
-# contract as run_job.sh. PROJECT_DIR defaults to this script's own directory so
-# any clone is self-contained; override for a different deployment.
+# contract as run_job.sh. PROJECT_DIR defaults to the Slurm submit dir (the
+# deployment dir when sbatch is invoked from the clone) or this script's dir;
+# override for a different deployment.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$SCRIPT_DIR}}"
 ENV_FILE="${PROJECT_DIR}/.env"
 RUN_SCRIPT="${PROJECT_DIR}/run_code.sh"
 CONDA_SH="${CONDA_SH:-/home/kang/miniconda3/etc/profile.d/conda.sh}"
