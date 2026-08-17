@@ -308,6 +308,113 @@ def get_existing_hfd_dataset_source(dataset_id: str) -> str | None:
     return None
 
 
+def _load_local_json_split(dataset_id: str, split: str, streaming: bool):
+    """Load a local dataset directory of ``{split}.json`` / ``{split}.jsonl``.
+
+    Returns a HF ``Dataset`` for the requested split, or None when ``dataset_id``
+    is not a local path with a matching split file. This lets code-domain smoke
+    datasets live on disk as plain JSON arrays without a HF cache.
+    """
+    if not dataset_id or not isinstance(dataset_id, str):
+        return None
+    candidate = Path(dataset_id).expanduser()
+    if not candidate.exists():
+        return None
+    # Accept both a directory containing split files and a single split file.
+    split_files: list[Path] = []
+    if candidate.is_dir():
+        for suffix in (".json", ".jsonl"):
+            f = candidate / f"{split}{suffix}"
+            if f.exists():
+                split_files.append(f)
+    elif candidate.is_file():
+        split_files.append(candidate)
+    if not split_files:
+        return None
+    path = str(split_files[0])
+    rows = _read_local_json_rows(path)
+    if rows is None:
+        return None
+    try:
+        from datasets import Dataset
+        ds = Dataset.from_list(rows)
+    except Exception:
+        ds = _LocalJsonShim(rows)
+    if streaming:
+        try:
+            return ds.to_iterable_dataset()
+        except Exception:
+            return ds
+    return ds
+
+
+class _DtypeShim:
+    """Minimal stand-in for a HF feature dtype (``.dtype`` attribute)."""
+    __slots__ = ("dtype",)
+
+    def __init__(self, dtype: str) -> None:
+        self.dtype = dtype
+
+
+class _LocalJsonShim:
+    """List-backed stand-in for a HF ``Dataset`` used when ``datasets`` is absent.
+
+    Supports the interface the pipeline relies on: ``len()``, ``[i]``,
+    ``column_names`` and ``features`` (a dict of ``{col: dtype}`` consumed by
+    :func:`detect_schema`).
+    """
+
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+        cols: list[str] = []
+        for r in rows:
+            for k in r.keys():
+                if k not in cols:
+                    cols.append(k)
+        self.column_names = cols
+        self.features = {c: _DtypeShim("string") for c in cols}
+
+    def __len__(self) -> int:
+        return len(self._rows)
+
+    def __getitem__(self, idx):
+        return self._rows[idx]
+
+
+def _read_local_json_rows(path: str) -> list[dict] | None:
+    import json
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except Exception:
+        return None
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return [r for r in data if isinstance(r, dict)]
+        if isinstance(data, dict):
+            # {"data": [...]} or {"train": [...]} shapes.
+            for key in ("data", "train", "test", "items", "rows"):
+                if isinstance(data.get(key), list):
+                    return [r for r in data[key] if isinstance(r, dict)]
+            return [data]
+    except Exception:
+        pass
+    # Try JSONL.
+    rows: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            rows.append(obj)
+    return rows or None
+
+
 def load_hf_dataset_with_fallback(
     dataset_id: str,
     subset: str | None,
@@ -322,6 +429,12 @@ def load_hf_dataset_with_fallback(
     此函数先按调用方给的 subset 加载，失败后切换 subset 模式重试一次，
     两次都失败才抛原始异常。
     """
+    # Local on-disk datasets (e.g. data/code_smoke/{split}.json) take the fast
+    # path so code-domain runs need no HF cache or network access.
+    local = _load_local_json_split(dataset_id, split, streaming)
+    if local is not None:
+        return local
+
     load_dataset = importlib.import_module("datasets").load_dataset
     dataset_source = prepare_hfd_dataset_source(dataset_id) if allow_hfd else dataset_id
     load_kwargs: dict[str, Any] = {}
@@ -940,6 +1053,21 @@ def normalize_item(
 
     row_id = _row_id_from_item(item, schema, idx)
 
+    # Preserve code-domain test + entry_point so execution judging can run the
+    # candidate against the reference test. These are not part of the math
+    # schema, so without this they would be dropped during standardization.
+    from src.tools.code_execution import extract_code_test_fields as _extract_code_test_fields
+    _test_code, _entry_point, _ = _extract_code_test_fields(item)
+    _code_extra: dict[str, Any] = {}
+    if _test_code:
+        _code_extra["test"] = _test_code
+    if _entry_point:
+        _code_extra["entry_point"] = _entry_point
+    if _test_code and _entry_point:
+        # Code items with an executable test are judged by execution, not by
+        # symbolic answer matching or LLM subjective equivalence.
+        evaluation_method = "code_execution"
+
     return {
         "question_id": _question_id_for_row(
             dataset_id,
@@ -964,6 +1092,7 @@ def normalize_item(
         "source_dataset_columns": list(source_dataset_columns or item.keys()),
         "source_dataset_first_row": dict(source_dataset_first_row or {}),
         "source_dataset_schema": dict(source_dataset_schema or schema),
+        **_code_extra,
     }
 
 

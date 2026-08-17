@@ -8,6 +8,14 @@ from config.settings import (
     DIFFICULTY_LATE_MEDIUM_MIN,  # 后期轮次："medium" 的最小答对次数
     DIFFICULTY_LATE_ROUND,       # 从第几轮开始视为"后期"（使用更宽松的阈值）
     ROLLOUT_MAX_NEW_TOKENS,
+    use_code_execution_judging,
+    CODE_JUDGE_TIMEOUT_SECONDS,
+    CODE_JUDGE_MEMORY_MB,
+    CODE_JUDGE_MAX_WORKERS,
+)
+from src.tools.code_execution import (
+    EVALUATION_METHOD_CODE,
+    judge_predictions_code_batch,
 )
 from src.tools.inference_trace import build_inference_trace_row, write_inference_trace_rows
 from src.tools.llm_judge import judge_predictions_with_llm_batch
@@ -259,11 +267,22 @@ def _evaluation_method_for_item(item: Any, gold_answer: str, reference_solution:
     raw = str(_field(item, "evaluation_method", "judge_mode", default="") or "").strip().lower()
     if raw == EVALUATION_METHOD_LLM_JUDGE or _truthy(_field(item, "needs_judge", default=False)):
         return EVALUATION_METHOD_LLM_JUDGE
+    # Code domain: judge by executing tests when the item carries a test + entry_point.
+    if use_code_execution_judging() and _item_has_code_test(item):
+        return EVALUATION_METHOD_CODE
     if gold_answer:
         return EVALUATION_METHOD_GOLD
     if reference_solution:
         return EVALUATION_METHOD_LLM_JUDGE
     return EVALUATION_METHOD_GOLD
+
+
+def _item_has_code_test(item: Any) -> bool:
+    """True when a dataset item carries an executable test + entry point."""
+    from src.tools.code_execution import extract_code_test_fields
+
+    test_code, entry_point, _gold = extract_code_test_fields(item)
+    return bool(test_code and entry_point)
 
 
 def _judge_predictions_batch(
@@ -275,6 +294,7 @@ def _judge_predictions_batch(
     evaluation_methods: list[str],
     trace_id: str,
     round_id: int | None,
+    questions: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     judgements: list[dict[str, Any]] = [
         {
@@ -286,11 +306,15 @@ def _judge_predictions_batch(
         for _ in predictions
     ]
     llm_indices: list[int] = []
+    code_indices: list[int] = []
     for idx, prediction in enumerate(predictions):
         method = evaluation_methods[idx] if idx < len(evaluation_methods) else EVALUATION_METHOD_GOLD
         gold_answer = gold_answers[idx] if idx < len(gold_answers) else ""
         if method == EVALUATION_METHOD_LLM_JUDGE:
             llm_indices.append(idx)
+            continue
+        if method == EVALUATION_METHOD_CODE:
+            code_indices.append(idx)
             continue
         correct = judge_answer(prediction, gold_answer)
         judgements[idx] = {
@@ -299,6 +323,21 @@ def _judge_predictions_batch(
             "reason": "symbolic answer match",
             "source": "gold",
         }
+    # Code-execution judging: run each candidate against its test in a sandbox.
+    if code_indices:
+        code_items = [
+            (questions[idx] if questions and idx < len(questions) else {})
+            for idx in code_indices
+        ]
+        code_judgements = judge_predictions_code_batch(
+            predictions=[predictions[idx] for idx in code_indices],
+            items=code_items,
+            timeout=CODE_JUDGE_TIMEOUT_SECONDS,
+            memory_mb=CODE_JUDGE_MEMORY_MB,
+            max_workers=CODE_JUDGE_MAX_WORKERS,
+        )
+        for original_idx, judgement in zip(code_indices, code_judgements, strict=False):
+            judgements[original_idx] = judgement
     if llm_indices:
         llm_judgements = judge_predictions_with_llm_batch(
             predictions=[predictions[idx] for idx in llm_indices],
@@ -405,6 +444,7 @@ def tag_questions_by_pass_rate(
             evaluation_methods=evaluation_methods,
             trace_id=trace_id,
             round_id=round_id,
+            questions=questions,
         )
         thinking_indices = [
             idx
@@ -431,6 +471,7 @@ def tag_questions_by_pass_rate(
                 evaluation_methods=[evaluation_methods[idx] for idx in thinking_indices],
                 trace_id=trace_id,
                 round_id=round_id,
+                questions=[questions[idx] for idx in thinking_indices],
             )
             final_thinking_judgements = {
                 original_idx: judgement

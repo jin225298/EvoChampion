@@ -77,6 +77,12 @@ from src.models.messages import (
 )
 from src.models.state import EvoState
 from src.tools.model_runner import judge_answer, run_model_batch
+from src.tools.code_execution import (
+    EVALUATION_METHOD_CODE,
+    extract_code_test_fields,
+    judge_code_candidate,
+    judge_predictions_code_batch,
+)
 from src.tools.difficulty_tagger import tag_questions_by_pass_rate
 from src.tools.agent_prompts import EVALUATOR_JUDGE_PROMPT
 from src.tools.data_pipeline.log_parser import parse_structured_training_logs, parse_training_log
@@ -493,7 +499,7 @@ def evaluate_probe_set_detailed(
         question_difficulties,
         all_questions,
     ):
-        is_correct = judge_answer(pred, gold)
+        is_correct = _judge_eval_prediction(pred, gold, item=question, allow_llm_judge=False)
         if is_correct:
             correct += 1
         else:
@@ -685,9 +691,26 @@ def _evaluation_method_for_item(item: dict | None) -> str:
     raw = raw.replace("-", "_")
     if raw in {"llm_judge", "llm_as_judge", "llmasjudge"}:
         return "llm_judge"
+    if raw == EVALUATION_METHOD_CODE:
+        return EVALUATION_METHOD_CODE
     if _truthy_eval_flag(item.get("needs_judge", False)):
         return "llm_judge"
+    # Code domain: an item carrying an executable test + entry point is judged
+    # by execution (never by LLM subjective equivalence).
+    if _item_has_code_test(item):
+        return EVALUATION_METHOD_CODE
     return "gold"
+
+
+def _item_has_code_test(item: dict | None) -> bool:
+    if not isinstance(item, dict):
+        return False
+    from config.settings import use_code_execution_judging
+
+    if not use_code_execution_judging():
+        return False
+    test_code, entry_point, _gold = extract_code_test_fields(item)
+    return bool(test_code and entry_point)
 
 
 def _judge_eval_prediction(
@@ -700,7 +723,8 @@ def _judge_eval_prediction(
     allow_llm_judge: bool = True,
 ) -> bool:
     """Judge one eval prediction using the cleaned dataset's judge label."""
-    if _evaluation_method_for_item(item) == "llm_judge":
+    method = _evaluation_method_for_item(item)
+    if method == "llm_judge":
         if USE_LLM_AS_JUDGE and allow_llm_judge:
             return _is_correct_by_score(_llm_judge_score(
                 prediction,
@@ -710,6 +734,14 @@ def _judge_eval_prediction(
                 reference_solution=_reference_solution_for_item(item),
             ))
         return judge_answer(prediction, gold_answer)
+    if method == EVALUATION_METHOD_CODE:
+        test_code, entry_point, _gold = extract_code_test_fields(item or {})
+        from config.settings import CODE_JUDGE_TIMEOUT_SECONDS, CODE_JUDGE_MEMORY_MB
+        result = judge_code_candidate(
+            prediction, test_code, entry_point,
+            timeout=CODE_JUDGE_TIMEOUT_SECONDS, memory_mb=CODE_JUDGE_MEMORY_MB,
+        )
+        return bool(result.passed)
     return judge_answer(prediction, gold_answer)
 
 
@@ -733,13 +765,17 @@ def _judgements_from_predictions(
         for _ in predictions
     ]
     llm_indices: list[int] = []
+    code_indices: list[int] = []
     for idx, pred in enumerate(predictions):
         gold = gold_answers[idx] if idx < len(gold_answers) else ""
         prompt = prompts[idx] if prompts and idx < len(prompts) else ""
         item = items[idx] if items and idx < len(items) else {}
-        wants_llm_judge = _evaluation_method_for_item(item) == "llm_judge"
-        if wants_llm_judge and USE_LLM_AS_JUDGE:
+        method = _evaluation_method_for_item(item)
+        if method == "llm_judge" and USE_LLM_AS_JUDGE:
             llm_indices.append(idx)
+            continue
+        if method == EVALUATION_METHOD_CODE:
+            code_indices.append(idx)
             continue
         correct = _judge_eval_prediction(
             pred,
@@ -758,6 +794,17 @@ def _judgements_from_predictions(
             "fallback_used": False,
             "schema_errors": [],
         }
+    if code_indices:
+        from config.settings import CODE_JUDGE_TIMEOUT_SECONDS, CODE_JUDGE_MEMORY_MB, CODE_JUDGE_MAX_WORKERS
+        code_judgements = judge_predictions_code_batch(
+            predictions=[predictions[idx] for idx in code_indices],
+            items=[(items[idx] if items and idx < len(items) else {}) for idx in code_indices],
+            timeout=CODE_JUDGE_TIMEOUT_SECONDS,
+            memory_mb=CODE_JUDGE_MEMORY_MB,
+            max_workers=CODE_JUDGE_MAX_WORKERS,
+        )
+        for original_idx, judgement in zip(code_indices, code_judgements, strict=False):
+            judgements[original_idx] = judgement
     if llm_indices:
         batch_judgements = judge_predictions_with_llm_batch(
             predictions=[predictions[idx] for idx in llm_indices],

@@ -1,0 +1,26 @@
+[
+  {
+    "question": "Write a function div(a, b) that returns a divided by b (integer division, b != 0).",
+    "answer": "def div(a, b):\n    return a // b",
+    "test": "def check(candidate):\n    assert candidate(10, 2) == 5\n    assert candidate(9, 3) == 3\n    assert candidate(7, 2) == 3",
+    "entry_point": "div"
+  },
+  {
+    "question": "Write a function is_positive(n) that returns True if n > 0, else False.",
+    "answer": "def is_positive(n):\n    return n > 0",
+    "test": "def check(candidate):\n    assert candidate(5) is True\n    assert candidate(-1) is False\n    assert candidate(0) is False",
+    "entry_point": "is_positive"
+  },
+  {
+    "question": "Write a function concat(a, b) that returns the concatenation of strings a and b.",
+    "answer": "def concat(a, b):\n    return a + b",
+    "test": "def check(candidate):\n    assert candidate('foo', 'bar') == 'foobar'\n    assert candidate('', 'x') == 'x'\n    assert candidate('a', '') == 'a'",
+    "entry_point": "concat"
+  },
+  {
+    "question": "Write a function abs_val(n) that returns the absolute value of n.",
+    "answer": "def abs_val(n):\n    return n if n >= 0 else -n",
+    "test": "def check(candidate):\n    assert candidate(5) == 5\n    assert candidate(-5) == 5\n    assert candidate(0) == 0",
+    "entry_point": "abs_val"
+  }
+]

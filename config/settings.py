@@ -59,6 +59,39 @@ GLOBAL_PROBE_STRATIFIED_BY_MODULE = os.getenv("GLOBAL_PROBE_STRATIFIED_BY_MODULE
 
 
 # =============================================================================
+# Domain Configuration (math vs code)
+# =============================================================================
+# DOMAIN selects the domain-specific pipeline. "code" enables execution-based
+# judging (src/tools/code_execution.py) and code-domain agent prompts; any other
+# value (default) keeps the math flow unchanged.
+DOMAIN = os.getenv("DOMAIN", "math").strip().lower()
+IS_CODE_DOMAIN = DOMAIN == "code"
+
+# ANSWER_VERIFIER_TYPE controls how candidate answers are judged:
+#   "auto"           — code domain → execution judging; otherwise symbolic judge_answer
+#   "code_execution" — always judge by executing tests (requires test+entry_point per item)
+#   "symbolic"       — always use the math-style judge_answer
+ANSWER_VERIFIER_TYPE = os.getenv("ANSWER_VERIFIER_TYPE", "auto").strip().lower()
+
+
+def use_code_execution_judging() -> bool:
+    """Return True when judging should run candidate code against tests."""
+    if ANSWER_VERIFIER_TYPE == "code_execution":
+        return True
+    if ANSWER_VERIFIER_TYPE == "symbolic":
+        return False
+    # "auto" (and any unknown value): follow the domain.
+    return IS_CODE_DOMAIN
+
+
+# Code-execution judging parameters (consumed by src/tools/code_execution.py).
+CODE_JUDGE_TIMEOUT_SECONDS = float(os.getenv("CODE_JUDGE_TIMEOUT_SECONDS", "10"))
+CODE_JUDGE_MEMORY_MB = int(os.getenv("CODE_JUDGE_MEMORY_MB", "512"))
+CODE_JUDGE_CPU_SECONDS = int(os.getenv("CODE_JUDGE_CPU_SECONDS", "15"))
+CODE_JUDGE_MAX_WORKERS = int(os.getenv("CODE_JUDGE_MAX_WORKERS", "8"))
+
+
+# =============================================================================
 # Model Configuration
 # =============================================================================
 BASE_MODEL_NAME = os.getenv("BASE_MODEL_NAME", "")
