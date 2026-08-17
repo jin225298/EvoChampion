@@ -17,7 +17,7 @@
 #        └─ 路由：filter_post_rollout
 # =============================================================================
 
-from config.settings import DATA_HARD_RATIO_MERGE_THRESHOLD
+from config.settings import DATA_HARD_RATIO_MERGE_THRESHOLD, IS_CODE_DOMAIN
 from src.models.messages import (
     AgentName,
     MessageHeader,
@@ -32,6 +32,7 @@ from src.tools.agent_prompts import (
     DIFFICULTY_TEACHER_POLICY_PROMPT,   # leaf 3: 数据策略提示
     DIFFICULTY_TEACHER_TARGET_PROMPT,   # leaf 2: 目标难度
     DIFFICULTY_TEACHER_WEIGHTS_PROMPT,  # leaf 4: 难度权重配比
+    get_agent_prompt,
 )
 from src.tools.difficulty_tagger import (
     build_pass_count_histogram,
@@ -127,7 +128,7 @@ def _decide_difficulty_feedback(
     # ── leaf ①: 是否接收这批题 ──
     raw_accept, ok = decide_json_leaf(
         agent_name="difficulty_teacher.accept_batch",
-        prompt=DIFFICULTY_TEACHER_ACCEPT_PROMPT,
+        prompt=get_agent_prompt("difficulty_teacher.accept_batch"),
         context=base_context,
         field_name="accept_batch",
         fallback_value=fallback["accept_batch"],
@@ -142,7 +143,7 @@ def _decide_difficulty_feedback(
     # ── leaf ②: 目标难度（依赖①的结果） ──
     raw_target, ok = decide_json_leaf(
         agent_name="difficulty_teacher.target_difficulty",
-        prompt=DIFFICULTY_TEACHER_TARGET_PROMPT,
+        prompt=get_agent_prompt("difficulty_teacher.target_difficulty"),
         context={**base_context, "accept_batch": accept_batch},
         field_name="target_difficulty",
         fallback_value=fallback["target_difficulty"],
@@ -156,7 +157,7 @@ def _decide_difficulty_feedback(
     # ── leaf ③: 数据策略提示（依赖①②） ──
     raw_policy, ok = decide_json_leaf(
         agent_name="difficulty_teacher.dataset_policy_hint",
-        prompt=DIFFICULTY_TEACHER_POLICY_PROMPT,
+        prompt=get_agent_prompt("difficulty_teacher.dataset_policy_hint"),
         context={**base_context, "accept_batch": accept_batch, "target_difficulty": target_difficulty},
         field_name="dataset_policy_hint",
         fallback_value=fallback["dataset_policy_hint"],
@@ -170,7 +171,7 @@ def _decide_difficulty_feedback(
     # ── leaf ④: 难度权重配比（依赖①②③） ──
     raw_weights, ok = decide_json_leaf(
         agent_name="difficulty_teacher.difficulty_weights",
-        prompt=DIFFICULTY_TEACHER_WEIGHTS_PROMPT,
+        prompt=get_agent_prompt("difficulty_teacher.difficulty_weights"),
         context={
             **base_context,
             "accept_batch": accept_batch,
@@ -310,14 +311,24 @@ def rollout_aggregator_node(state: EvoState) -> dict:
     for item in merged.values():
         rollout_count = len(item["correct_flags"])
         pass_count = sum(1 for flag in item["correct_flags"] if flag)
-        difficulty = next(
-            (
-                str(value)
-                for value in item.get("dynamic_difficulty_votes", [])
-                if str(value) in _DYNAMIC_DIFFICULTIES and str(value) != "unknown"
-            ),
-            "unknown",
-        )
+        if IS_CODE_DOMAIN:
+            # Code difficulty is defined purely by test execution results:
+            # all pass = easy, partial = medium, all fail = hard, no test = unknown.
+            if rollout_count > 0 and pass_count == rollout_count:
+                difficulty = "easy"
+            elif pass_count > 0:
+                difficulty = "medium"
+            else:
+                difficulty = "hard"
+        else:
+            difficulty = next(
+                (
+                    str(value)
+                    for value in item.get("dynamic_difficulty_votes", [])
+                    if str(value) in _DYNAMIC_DIFFICULTIES and str(value) != "unknown"
+                ),
+                "unknown",
+            )
         item["pass_count"] = pass_count
         item["rollout_count"] = rollout_count
         item["pass_rate"] = pass_count / rollout_count if rollout_count else 0.0
