@@ -47,7 +47,7 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
     if target_style == TARGET_STYLE_ANSWER and not train_output:
         train_output = rollout_gold_answer
     raw_method = text_or_empty(get_question_field(item, "evaluation_method", ""))
-    evaluation_method = raw_method if raw_method in {"gold", "llm_judge"} else ""
+    evaluation_method = raw_method if raw_method in {"gold", "llm_judge", "code_execution"} else ""
     raw_needs_judge = get_question_field(item, "needs_judge", False)
     needs_judge = raw_needs_judge if isinstance(raw_needs_judge, bool) else str(raw_needs_judge).lower() in {
         "1",
