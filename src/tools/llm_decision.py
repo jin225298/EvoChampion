@@ -801,7 +801,12 @@ def _log_ab_comparison(
 def prompt_for_agent(state: dict[str, Any], agent_name: str, default_prompt: str) -> str:
     """从提示词设计师产物中读取提示词；没有则使用默认框架。"""
     if agent_name in _CRITICAL_PROMPT_AGENTS or agent_name.startswith("parameter_master"):
-        return default_prompt
+        # Domain-aware: code domain overrides critical prompts (e.g. evaluator_judge).
+        try:
+            from src.tools.agent_prompts import get_agent_prompt
+            return get_agent_prompt(agent_name, default_prompt)
+        except Exception:
+            return default_prompt
     pack = state.get("agent_prompt_pack", {}) if isinstance(state, dict) else {}
     if not isinstance(pack, dict):
         return default_prompt

@@ -85,6 +85,12 @@ from src.tools.llm_decision import decide_json, prompt_for_agent
 from src.tools.llm_judge import is_correct_by_score as _shared_is_correct_by_score
 from src.tools.llm_judge import judge_predictions_with_llm_batch
 from src.tools.llm_judge import llm_judge_score
+from src.tools.code_execution import (
+    EVALUATION_METHOD_CODE_EXEC,
+    is_code_exec_item,
+    judge_code_batch,
+    judge_code_candidate,
+)
 from src.tools.mathbench_probe import MathBenchProbeResult, mathbench_probe_enabled, run_mathbench_probe
 from src.tools.strategy_policy import decide_evaluation_gates
 
@@ -493,7 +499,7 @@ def evaluate_probe_set_detailed(
         question_difficulties,
         all_questions,
     ):
-        is_correct = judge_answer(pred, gold)
+        is_correct = _judge_eval_prediction(pred, gold, item=question, state=None, allow_llm_judge=False)
         if is_correct:
             correct += 1
         else:
@@ -683,6 +689,10 @@ def _evaluation_method_for_item(item: dict | None) -> str:
         return "gold"
     raw = str(item.get("evaluation_method") or item.get("judge_mode") or "").strip().lower()
     raw = raw.replace("-", "_")
+    if raw == EVALUATION_METHOD_CODE_EXEC:
+        return EVALUATION_METHOD_CODE_EXEC
+    if is_code_exec_item(item):
+        return EVALUATION_METHOD_CODE_EXEC
     if raw in {"llm_judge", "llm_as_judge", "llmasjudge"}:
         return "llm_judge"
     if _truthy_eval_flag(item.get("needs_judge", False)):
@@ -700,7 +710,23 @@ def _judge_eval_prediction(
     allow_llm_judge: bool = True,
 ) -> bool:
     """Judge one eval prediction using the cleaned dataset's judge label."""
-    if _evaluation_method_for_item(item) == "llm_judge":
+    method = _evaluation_method_for_item(item)
+    if method == EVALUATION_METHOD_CODE_EXEC:
+        # Code-domain correctness is decided ONLY by executing the candidate
+        # against the item's test — never by LLM subjective judgment.
+        test = str((item or {}).get("test") or (item or {}).get("code_test") or "")
+        entry_point = str((item or {}).get("entry_point") or (item or {}).get("entry_point_func") or "").strip()
+        if not test or not entry_point:
+            return False
+        result = judge_code_candidate(
+            prediction,
+            test=test,
+            entry_point=entry_point,
+            gold_answer=gold_answer,
+            question_text=prompt,
+        )
+        return bool(result.get("correct"))
+    if method == "llm_judge":
         if USE_LLM_AS_JUDGE and allow_llm_judge:
             return _is_correct_by_score(_llm_judge_score(
                 prediction,
@@ -733,11 +759,16 @@ def _judgements_from_predictions(
         for _ in predictions
     ]
     llm_indices: list[int] = []
+    code_indices: list[int] = []
     for idx, pred in enumerate(predictions):
         gold = gold_answers[idx] if idx < len(gold_answers) else ""
         prompt = prompts[idx] if prompts and idx < len(prompts) else ""
         item = items[idx] if items and idx < len(items) else {}
-        wants_llm_judge = _evaluation_method_for_item(item) == "llm_judge"
+        method = _evaluation_method_for_item(item)
+        if method == EVALUATION_METHOD_CODE_EXEC:
+            code_indices.append(idx)
+            continue
+        wants_llm_judge = method == "llm_judge"
         if wants_llm_judge and USE_LLM_AS_JUDGE:
             llm_indices.append(idx)
             continue
@@ -758,6 +789,25 @@ def _judgements_from_predictions(
             "fallback_used": False,
             "schema_errors": [],
         }
+    # Code-domain items: judge by executing the candidate against the test.
+    if code_indices:
+        code_judgements = judge_code_batch(
+            predictions=[predictions[idx] for idx in code_indices],
+            tests=[
+                str((items[idx] if items and idx < len(items) else {}).get("test")
+                    or (items[idx] if items and idx < len(items) else {}).get("code_test") or "")
+                for idx in code_indices
+            ],
+            entry_points=[
+                str((items[idx] if items and idx < len(items) else {}).get("entry_point")
+                    or (items[idx] if items and idx < len(items) else {}).get("entry_point_func") or "").strip()
+                for idx in code_indices
+            ],
+            gold_answers=[gold_answers[idx] if idx < len(gold_answers) else "" for idx in code_indices],
+            question_texts=[prompts[idx] if prompts and idx < len(prompts) else "" for idx in code_indices],
+        )
+        for original_idx, judgement in zip(code_indices, code_judgements, strict=False):
+            judgements[original_idx] = judgement
     if llm_indices:
         batch_judgements = judge_predictions_with_llm_batch(
             predictions=[predictions[idx] for idx in llm_indices],

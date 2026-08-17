@@ -23,6 +23,8 @@ PROCESSED_QUESTION_FIELDS = (
     "target_style",
     "evaluation_method",
     "needs_judge",
+    "test",
+    "entry_point",
 )
 
 
@@ -47,15 +49,24 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
     if target_style == TARGET_STYLE_ANSWER and not train_output:
         train_output = rollout_gold_answer
     raw_method = text_or_empty(get_question_field(item, "evaluation_method", ""))
-    evaluation_method = raw_method if raw_method in {"gold", "llm_judge"} else ""
+    evaluation_method = raw_method if raw_method in {"gold", "llm_judge", "code_exec"} else ""
     raw_needs_judge = get_question_field(item, "needs_judge", False)
     needs_judge = raw_needs_judge if isinstance(raw_needs_judge, bool) else str(raw_needs_judge).lower() in {
         "1",
         "true",
         "yes",
     }
+    code_test = text_or_empty(get_question_field(item, "test", "")) or text_or_empty(
+        get_question_field(item, "code_test", "")
+    )
+    code_entry_point = text_or_empty(get_question_field(item, "entry_point", "")) or text_or_empty(
+        get_question_field(item, "entry_point_func", "")
+    )
     if not evaluation_method:
-        evaluation_method = "gold" if rollout_gold_answer or gold_answer else "llm_judge" if train_output else "gold"
+        if code_test and code_entry_point:
+            evaluation_method = "code_exec"
+        else:
+            evaluation_method = "gold" if rollout_gold_answer or gold_answer else "llm_judge" if train_output else "gold"
     needs_judge = bool(needs_judge or evaluation_method == "llm_judge")
     return {
         "rollout_gold_answer": rollout_gold_answer,
@@ -63,6 +74,8 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
         "target_style": target_style,
         "evaluation_method": evaluation_method,
         "needs_judge": needs_judge,
+        "test": code_test,
+        "entry_point": code_entry_point,
     }
 
 

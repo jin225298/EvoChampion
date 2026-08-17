@@ -1,0 +1,50 @@
+[
+  {
+    "question": "Write a function increment(n) that returns n plus 1.",
+    "answer": "def increment(n):\n    return n + 1",
+    "test": "def check(candidate):\n    assert candidate(4) == 5\n    assert candidate(0) == 1\n    assert candidate(-1) == 0",
+    "entry_point": "increment"
+  },
+  {
+    "question": "Write a function is_odd(n) that returns True if n is odd, else False.",
+    "answer": "def is_odd(n):\n    return n % 2 == 1",
+    "test": "def check(candidate):\n    assert candidate(3) is True\n    assert candidate(4) is False\n    assert candidate(0) is False",
+    "entry_point": "is_odd"
+  },
+  {
+    "question": "Write a function is_negative(n) that returns True if n is negative, else False.",
+    "answer": "def is_negative(n):\n    return n < 0",
+    "test": "def check(candidate):\n    assert candidate(-3) is True\n    assert candidate(5) is False\n    assert candidate(0) is False",
+    "entry_point": "is_negative"
+  },
+  {
+    "question": "Write a function cube(n) that returns n cubed.",
+    "answer": "def cube(n):\n    return n * n * n",
+    "test": "def check(candidate):\n    assert candidate(2) == 8\n    assert candidate(0) == 0\n    assert candidate(-3) == -27",
+    "entry_point": "cube"
+  },
+  {
+    "question": "Write a function triple(n) that returns three times n.",
+    "answer": "def triple(n):\n    return n * 3",
+    "test": "def check(candidate):\n    assert candidate(4) == 12\n    assert candidate(0) == 0\n    assert candidate(-2) == -6",
+    "entry_point": "triple"
+  },
+  {
+    "question": "Write a function to_upper(s) that returns the uppercase version of string s.",
+    "answer": "def to_upper(s):\n    return s.upper()",
+    "test": "def check(candidate):\n    assert candidate('abc') == 'ABC'\n    assert candidate('') == ''\n    assert candidate('Ab1') == 'AB1'",
+    "entry_point": "to_upper"
+  },
+  {
+    "question": "Write a function list_length(lst) that returns the number of elements in lst.",
+    "answer": "def list_length(lst):\n    return len(lst)",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 3\n    assert candidate([]) == 0\n    assert candidate(['a']) == 1",
+    "entry_point": "list_length"
+  },
+  {
+    "question": "Write a function multiply_three(a, b, c) that returns the product of a, b, and c.",
+    "answer": "def multiply_three(a, b, c):\n    return a * b * c",
+    "test": "def check(candidate):\n    assert candidate(2, 3, 4) == 24\n    assert candidate(0, 5, 9) == 0\n    assert candidate(-1, 2, 3) == -6",
+    "entry_point": "multiply_three"
+  }
+]

@@ -51,6 +51,18 @@ BENCHMARK_QUESTION_KEY = os.getenv("BENCHMARK_QUESTION_KEY", "question")
 BENCHMARK_ANSWER_KEY = os.getenv("BENCHMARK_ANSWER_KEY", "answer")
 BENCHMARK_FORMAT = os.getenv("BENCHMARK_FORMAT")
 
+# Domain selector. "math" (default) keeps the legacy math/answer-matching loop;
+# "code" switches data admission, rollout judging, evaluation and prompts to the
+# code-domain execution-based loop (see src/tools/code_execution.py).
+DOMAIN = os.getenv("DOMAIN", "math").strip().lower()
+if DOMAIN not in {"math", "code"}:
+    DOMAIN = "math"
+
+# Answer verifier selection. "auto" picks the verifier from DOMAIN (execution
+# for code, symbolic math match for math). Explicit values are reserved for
+# future use and currently fall back to the domain default.
+ANSWER_VERIFIER_TYPE = os.getenv("ANSWER_VERIFIER_TYPE", "auto").strip().lower()
+
 # Instruction prefix prepended to every inference prompt
 INSTRUCTION_PREFIX = os.getenv("INSTRUCTION_PREFIX", "请解答下面的题目。\n")
 

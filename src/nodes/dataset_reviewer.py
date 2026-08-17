@@ -29,13 +29,16 @@ from config.settings import (
     DATASET_REVIEW_FAILURES_BEFORE_BACKOFF,
     DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS,
     DATASET_REVIEW_TIMEOUT_KILL_GRACE_SECONDS,
+    DOMAIN,
     get_session_dir,
 )
 from src.tools.agent_prompts import DATASET_REVIEWER_PROMPT
 from src.tools.dataset_cleaner_codegen import (
     CleanerCodegenRequest,
     build_cleaner_provider,
+    build_passthrough_code_cleaner_ref,
     ensure_cleaner_for_ref,
+    is_local_code_dataset,
 )
 from src.tools.dataset_adapter import (
     detect_schema_from_item,
@@ -2059,6 +2062,35 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
             f"reason={verdict['reason']} samples={verdict['sample_count']}"
         )
         return _decorate_verdict(verdict, requested_ref, resolved_ref)
+
+    # Auto-accept already-normalized local code datasets (e.g. the code_smoke
+    # benchmark) with a passthrough cleaner. This makes the code-domain loop
+    # train on local data without relying on the LLM reviewer or a DeepSeek /
+    # local cleaner provider, both of which are off by default.
+    if DOMAIN == "code" and is_local_code_dataset(str(ref.dataset_id), samples):
+        try:
+            safe_id = str(ref.dataset_id).replace("/", "_").replace("\\", "_")
+            cleaner_cache_dir = get_session_dir(state.get("trace_id", "")) / "cleaners" / safe_id
+            cleaner_ref = build_passthrough_code_cleaner_ref(cleaner_cache_dir, dataset_id=str(ref.dataset_id))
+            resolved_ref = dict(resolved_ref)
+            resolved_ref["cleaner_cache_ref"] = dict(cleaner_ref)
+            schema = dict(resolved_ref.get("source_dataset_schema") or {})
+            schema["cleaner_cache_ref"] = dict(cleaner_ref)
+            resolved_ref["source_dataset_schema"] = schema
+            verdict = {
+                "dataset_id": resolved_dataset_ref.dataset_id,
+                "verdict": "accept",
+                "reason": "local code dataset with executable tests; passthrough cleaner",
+                "suitability_score": 1.0,
+                "sample_count": len(samples),
+            }
+            print(
+                f"[dataset_reviewer] {ref.dataset_id}: "
+                f"verdict=accept (local code dataset, passthrough cleaner) samples={len(samples)}"
+            )
+            return _decorate_verdict(verdict, requested_ref, resolved_ref)
+        except Exception as exc:
+            print(f"[dataset_reviewer] {ref.dataset_id}: passthrough cleaner failed: {type(exc).__name__}: {exc}")
 
     card_summary = load_dataset_card_summary(
         ref.dataset_id,

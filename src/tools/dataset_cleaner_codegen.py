@@ -944,9 +944,22 @@ def _standard_question_from_cleaned(
         or rollout_gold_answer
         or gold_answer
     ).strip()
+    # Code-domain fields: prefer the cleaner output, fall back to the raw row.
+    first_row = source_dataset_first_row if isinstance(source_dataset_first_row, dict) else {}
+    code_test = str(
+        cleaned.get("test") or cleaned.get("code_test")
+        or first_row.get("test") or first_row.get("code_test") or ""
+    ).strip()
+    code_entry_point = str(
+        cleaned.get("entry_point") or cleaned.get("entry_point_func")
+        or first_row.get("entry_point") or first_row.get("entry_point_func") or ""
+    ).strip()
     evaluation_method = str(cleaned.get("evaluation_method") or "").strip()
-    if evaluation_method not in {"gold", "llm_judge"}:
-        evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else "llm_judge"
+    if evaluation_method not in {"gold", "llm_judge", "code_exec"}:
+        if code_test and code_entry_point:
+            evaluation_method = "code_exec"
+        else:
+            evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else "llm_judge"
     needs_judge = _clean_bool(cleaned.get("needs_judge")) or evaluation_method == "llm_judge"
     schema = dict(source_dataset_schema)
     marker = cleaned.get("final_answer_marker")
@@ -974,6 +987,8 @@ def _standard_question_from_cleaned(
         "source_dataset_columns": list(source_dataset_columns),
         "source_dataset_first_row": dict(source_dataset_first_row),
         "source_dataset_schema": schema,
+        "test": code_test,
+        "entry_point": code_entry_point,
     }
 
 
@@ -1003,3 +1018,65 @@ def build_cleaner_provider(
             ),
         )
     return None
+
+
+# Passthrough cleaner for already-normalized local code datasets (e.g. the
+# code_smoke benchmark). Such a dataset already has question/answer/test/
+# entry_point columns, so no LLM/DeepSeek codegen is needed: the cleaner just
+# maps the raw row to the standard cleaned shape, carrying the executable test
+# and entry_point through for execution-based judging.
+_PASSTHROUGH_CODE_CLEANER = '''def clean_record(row, context):
+    question = row.get("question", row.get("input", row.get("problem", "")))
+    answer = row.get("answer", row.get("output", row.get("target", "")))
+    test = row.get("test", row.get("code_test", ""))
+    entry_point = row.get("entry_point", row.get("entry_point_func", ""))
+    return {
+        "status": "cleaned",
+        "question_text": str(question),
+        "gold_answer": str(answer),
+        "rollout_gold_answer": str(answer),
+        "train_output": str(answer),
+        "target_style": "answer",
+        "evaluation_method": "code_exec",
+        "test": str(test),
+        "entry_point": str(entry_point),
+    }
+'''
+
+
+def build_passthrough_code_cleaner_ref(cache_dir, dataset_id: str = "") -> dict[str, Any]:
+    """Write and validate a passthrough cleaner for a local code dataset.
+
+    Returns a ready ``cleaner_cache_ref`` (``{status, code_path, ...}``) so the
+    screening path can load an already-normalized code dataset without an LLM
+    or DeepSeek cleaner provider.
+    """
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    code_path = cache_dir / "passthrough_code_cleaner.py"
+    code_path.write_text(_PASSTHROUGH_CODE_CLEANER, encoding="utf-8")
+    # Validate the generated cleaner loads under the sandboxed builtins.
+    _load_cleaner_function(_PASSTHROUGH_CODE_CLEANER)
+    return {
+        "status": "ready",
+        "code_path": str(code_path),
+        "provider": "passthrough_code",
+        "dataset_id": str(dataset_id),
+    }
+
+
+def is_local_code_dataset(ref_dataset_id: str, samples: list[dict]) -> bool:
+    """True when a dataset ref points at a local code dataset with test+entry_point.
+
+    Used to auto-accept already-normalized local code datasets (e.g. the
+    code_smoke benchmark) without requiring an LLM reviewer or cleaner provider.
+    """
+    if not ref_dataset_id:
+        return False
+    path = Path(ref_dataset_id).expanduser()
+    if not path.exists():
+        return False
+    for sample in samples:
+        if isinstance(sample, dict) and sample.get("test") and sample.get("entry_point"):
+            return True
+    return False

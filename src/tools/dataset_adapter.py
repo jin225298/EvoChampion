@@ -308,6 +308,47 @@ def get_existing_hfd_dataset_source(dataset_id: str) -> str | None:
     return None
 
 
+def _local_dataset_data_files(dataset_id: str) -> dict[str, str] | None:
+    """Map a local dataset path to ``{split: file_path}`` for the JSON builder.
+
+    Supports a directory containing ``train.json``/``test.json`` (or any
+    ``*.json``/``*.jsonl`` files keyed by filename stem) and a single JSON/JSONL
+    file. Returns ``None`` when the path is not a readable local dataset.
+    """
+    if not dataset_id:
+        return None
+    path = Path(dataset_id).expanduser()
+    if not path.exists():
+        return None
+    if path.is_file():
+        # A single file is exposed as the "train" split by default; callers
+        # requesting another split fall back to the same file.
+        return {"train": str(path), "test": str(path)}
+    if not path.is_dir():
+        return None
+    data_files: dict[str, str] = {}
+    for child in sorted(path.iterdir()):
+        if not child.is_file():
+            continue
+        suffix = child.suffix.lower()
+        if suffix not in {".json", ".jsonl"}:
+            continue
+        stem = child.stem.lower()
+        # Normalize common split aliases onto canonical split names.
+        if stem in {"train", "training", "dev", "val", "validation", "test", "eval"}:
+            split_name = {"training": "train", "dev": "validation", "val": "validation", "eval": "test"}.get(stem, stem)
+        else:
+            split_name = stem
+        data_files[split_name] = str(child)
+    # Ensure canonical train/test entries resolve even if only one file exists.
+    if data_files:
+        if "train" not in data_files and "test" in data_files:
+            data_files["train"] = data_files["test"]
+        if "test" not in data_files and "train" in data_files:
+            data_files["test"] = data_files["train"]
+    return data_files or None
+
+
 def load_hf_dataset_with_fallback(
     dataset_id: str,
     subset: str | None,
@@ -321,7 +362,35 @@ def load_hf_dataset_with_fallback(
     坑：有些数据集必须传 name="main"（如 GSM8K），有些传了反而报错。
     此函数先按调用方给的 subset 加载，失败后切换 subset 模式重试一次，
     两次都失败才抛原始异常。
+
+    本地路径（目录或单个 JSON/JSONL 文件）直接走 ``datasets`` 的 JSON builder，
+    不需要联网，用于代码领域 smoke 数据集等本地数据。
     """
+    # Local dataset path: load directly via the JSON builder (no network, no
+    # hfd.sh). This makes a local ``data/code_smoke`` benchmark loadable.
+    data_files = _local_dataset_data_files(dataset_id)
+    if data_files is not None:
+        load_dataset = importlib.import_module("datasets").load_dataset
+        target_split = split or "train"
+        try:
+            return load_dataset(
+                "json",
+                data_files=data_files,
+                split=target_split,
+                streaming=streaming,
+            )
+        except Exception:
+            # If the requested split is missing, fall back to whatever split
+            # is available (e.g. a single-file dataset exposed as "train").
+            if target_split not in data_files and "train" in data_files:
+                return load_dataset(
+                    "json",
+                    data_files=data_files,
+                    split="train",
+                    streaming=streaming,
+                )
+            raise
+
     load_dataset = importlib.import_module("datasets").load_dataset
     dataset_source = prepare_hfd_dataset_source(dataset_id) if allow_hfd else dataset_id
     load_kwargs: dict[str, Any] = {}
@@ -911,17 +980,34 @@ def normalize_item(
         rollout_gold_answer = ""
         raw_evaluation_method = "llm_judge"
 
-    evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else (
-        "llm_judge" if raw_evaluation_method == "llm_judge" or train_output else "gold"
-    )
-    if evaluation_method == "gold" and not (gold_answer or rollout_gold_answer):
-        return None
-    if evaluation_method == "llm_judge" and not train_output:
-        return None
-    if evaluation_method == "gold" and not _valid_answer_text(gold_answer or rollout_gold_answer, a_field):
-        return None
-    if evaluation_method == "gold" and _looks_like_serialized_conversation(gold_answer or rollout_gold_answer):
-        return None
+    # Code-domain items carry an executable test + entry_point and are judged by
+    # execution (src/tools/code_execution.py), never by symbolic answer matching.
+    from config.settings import DOMAIN
+    from src.tools.code_execution import EVALUATION_METHOD_CODE_EXEC, is_code_exec_item
+
+    code_test = ""
+    code_entry_point = ""
+    is_code_item = DOMAIN == "code" or is_code_exec_item(item)
+    if is_code_item:
+        code_test = _extract_text(item, "test") or _extract_text(item, "code_test")
+        code_entry_point = str(
+            item.get("entry_point") or item.get("entry_point_func") or ""
+        ).strip()
+        if not code_test or not code_entry_point:
+            return None  # code items require both test and entry_point
+        evaluation_method = EVALUATION_METHOD_CODE_EXEC
+    else:
+        evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else (
+            "llm_judge" if raw_evaluation_method == "llm_judge" or train_output else "gold"
+        )
+        if evaluation_method == "gold" and not (gold_answer or rollout_gold_answer):
+            return None
+        if evaluation_method == "llm_judge" and not train_output:
+            return None
+        if evaluation_method == "gold" and not _valid_answer_text(gold_answer or rollout_gold_answer, a_field):
+            return None
+        if evaluation_method == "gold" and _looks_like_serialized_conversation(gold_answer or rollout_gold_answer):
+            return None
 
     explicit_target_style = schema.get("target_style")
     target_style = infer_target_style(
@@ -964,6 +1050,9 @@ def normalize_item(
         "source_dataset_columns": list(source_dataset_columns or item.keys()),
         "source_dataset_first_row": dict(source_dataset_first_row or {}),
         "source_dataset_schema": dict(source_dataset_schema or schema),
+        # Code-domain fields (empty for math items; populated for code_exec items).
+        "test": code_test,
+        "entry_point": code_entry_point,
     }
 
 

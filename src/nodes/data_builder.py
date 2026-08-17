@@ -576,6 +576,10 @@ def _alpaca_metadata(q: dict, split_tag: int, split_role: str) -> dict:
         "think": q.get("think", ""),
         "evaluation_method": q.get("evaluation_method", "gold"),
         "needs_judge": bool(q.get("needs_judge", False)),
+        # Code-domain fields: carry the executable test + entry_point through to
+        # the eval/test JSONL so the evaluator can judge by execution.
+        "test": q.get("test") or q.get("code_test") or "",
+        "entry_point": q.get("entry_point") or q.get("entry_point_func") or "",
         "target_style": infer_target_style(
             train_output,
             q.get("rollout_gold_answer", ""),

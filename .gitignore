@@ -35,9 +35,7 @@ tmp/
 补丁和及其他/
 TODO/
 run_fallback.sh
-run_code.sh
 run_judge128.sh
-run_job_code.sh
 run_job_judge128.sh
 run_baseline_eval.sh
 baseline_train_eval.sh

@@ -31,6 +31,7 @@ from config.settings import (
     BENCHMARK_QUESTION_KEY,
     CANDIDATE_MODEL_DIR,
     CHAMPION_MODEL_PATH,
+    DOMAIN,
     EVAL_MAX_NEW_TOKENS,
     get_classifier_labels,
     EXTERNAL_PROBE_MANIFEST_PATH,
@@ -206,6 +207,16 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
     if not subject:
         from src.tools.dataset_bank import infer_module
         subject = infer_module(question_text)
+    # Code-domain items carry an executable test + entry_point and are judged by
+    # execution. Carry them through so the frozen probe / fixed benchmark can be
+    # judged by code_execution instead of symbolic answer matching.
+    code_test = str(item.get("test") or item.get("code_test") or "")
+    code_entry_point = str(item.get("entry_point") or item.get("entry_point_func") or "").strip()
+    if DOMAIN == "code" and code_test and code_entry_point:
+        from src.tools.code_execution import EVALUATION_METHOD_CODE_EXEC
+        evaluation_method = EVALUATION_METHOD_CODE_EXEC
+    else:
+        evaluation_method = "gold"
     return {
         "question_id": f"{safe_id}_{split}_{idx}",
         "question_text": question_text,
@@ -213,6 +224,8 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "rollout_gold_answer": gold_answer,
         "train_output": gold_answer,
         "target_style": "answer",
+        "evaluation_method": evaluation_method,
+        "needs_judge": evaluation_method == "llm_judge",
         "source_dataset_id": f"{BENCHMARK_DATASET_ID}/{split}",
         "source_dataset_row_id": str(idx),
         "source_dataset_split": split,
@@ -220,6 +233,8 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "source_dataset_requested_split": split,
         "module": subject,
         "dynamic_difficulty": str(item.get("level", "")),
+        "test": code_test,
+        "entry_point": code_entry_point,
     }
 
 

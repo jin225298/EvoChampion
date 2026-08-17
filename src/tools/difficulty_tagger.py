@@ -9,6 +9,7 @@ from config.settings import (
     DIFFICULTY_LATE_ROUND,       # 从第几轮开始视为"后期"（使用更宽松的阈值）
     ROLLOUT_MAX_NEW_TOKENS,
 )
+from src.tools.code_execution import EVALUATION_METHOD_CODE_EXEC, judge_code_batch
 from src.tools.inference_trace import build_inference_trace_row, write_inference_trace_rows
 from src.tools.llm_judge import judge_predictions_with_llm_batch
 from src.tools.model_runner import judge_answer, run_model_batch
@@ -257,8 +258,13 @@ def _gold_answer_for_item(item: Any) -> str:
 
 def _evaluation_method_for_item(item: Any, gold_answer: str, reference_solution: str) -> str:
     raw = str(_field(item, "evaluation_method", "judge_mode", default="") or "").strip().lower()
+    if raw == EVALUATION_METHOD_CODE_EXEC:
+        return EVALUATION_METHOD_CODE_EXEC
     if raw == EVALUATION_METHOD_LLM_JUDGE or _truthy(_field(item, "needs_judge", default=False)):
         return EVALUATION_METHOD_LLM_JUDGE
+    # Items carrying an executable test + entry_point are code-domain items.
+    if _field(item, "test", "code_test", default="") and _field(item, "entry_point", "entry_point_func", default=""):
+        return EVALUATION_METHOD_CODE_EXEC
     if gold_answer:
         return EVALUATION_METHOD_GOLD
     if reference_solution:
@@ -275,6 +281,8 @@ def _judge_predictions_batch(
     evaluation_methods: list[str],
     trace_id: str,
     round_id: int | None,
+    tests: list[str] | None = None,
+    entry_points: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     judgements: list[dict[str, Any]] = [
         {
@@ -286,9 +294,13 @@ def _judge_predictions_batch(
         for _ in predictions
     ]
     llm_indices: list[int] = []
+    code_indices: list[int] = []
     for idx, prediction in enumerate(predictions):
         method = evaluation_methods[idx] if idx < len(evaluation_methods) else EVALUATION_METHOD_GOLD
         gold_answer = gold_answers[idx] if idx < len(gold_answers) else ""
+        if method == EVALUATION_METHOD_CODE_EXEC:
+            code_indices.append(idx)
+            continue
         if method == EVALUATION_METHOD_LLM_JUDGE:
             llm_indices.append(idx)
             continue
@@ -299,6 +311,17 @@ def _judge_predictions_batch(
             "reason": "symbolic answer match",
             "source": "gold",
         }
+    # Code-domain items: judge by executing the candidate against the test.
+    if code_indices:
+        code_judgements = judge_code_batch(
+            predictions=[predictions[idx] for idx in code_indices],
+            tests=[tests[idx] if tests and idx < len(tests) else "" for idx in code_indices],
+            entry_points=[entry_points[idx] if entry_points and idx < len(entry_points) else "" for idx in code_indices],
+            gold_answers=[gold_answers[idx] if idx < len(gold_answers) else "" for idx in code_indices],
+            question_texts=[question_texts[idx] if idx < len(question_texts) else "" for idx in code_indices],
+        )
+        for original_idx, judgement in zip(code_indices, code_judgements, strict=False):
+            judgements[original_idx] = judgement
     if llm_indices:
         llm_judgements = judge_predictions_with_llm_batch(
             predictions=[predictions[idx] for idx in llm_indices],
@@ -360,7 +383,6 @@ def tag_questions_by_pass_rate(
 
     # 从题目中提取 prompt 文本（尝试 question_text / input 两个可能的字段名）
     original_prompts = [_rollout_prompt(str(_field(q, "question_text", "input", default=""))) for q in questions]
-    answer_only_prompts = [_answer_only_rollout_prompt(prompt) for prompt in original_prompts]
     # 从题目中提取判题配置：有真实 gold 走符号判题；无 gold 但有过程/证明时走 LLM judge。
     gold_answers = [_gold_answer_for_item(q) for q in questions]
     reference_solutions = [_reference_solution(q) for q in questions]
@@ -369,6 +391,16 @@ def tag_questions_by_pass_rate(
         for idx, q in enumerate(questions)
     ]
     needs_judge_flags = [method == EVALUATION_METHOD_LLM_JUDGE for method in evaluation_methods]
+    # Code-domain items carry an executable test + entry_point; judge by execution.
+    code_tests = [str(_field(q, "test", "code_test", default="") or "") for q in questions]
+    code_entry_points = [str(_field(q, "entry_point", "entry_point_func", default="") or "").strip() for q in questions]
+    # Code items are not boxed-answer questions: do not append the math answer-only
+    # suffix, which would mislead the model into emitting a \\boxed{} token.
+    answer_only_prompts = [
+        original_prompts[idx] if evaluation_methods[idx] == EVALUATION_METHOD_CODE_EXEC
+        else _answer_only_rollout_prompt(original_prompts[idx])
+        for idx in range(len(questions))
+    ]
 
     # 每道题的答对计数，初始化为 0
     pass_counts = [0] * len(questions)
@@ -405,6 +437,8 @@ def tag_questions_by_pass_rate(
             evaluation_methods=evaluation_methods,
             trace_id=trace_id,
             round_id=round_id,
+            tests=code_tests,
+            entry_points=code_entry_points,
         )
         thinking_indices = [
             idx
@@ -431,6 +465,8 @@ def tag_questions_by_pass_rate(
                 evaluation_methods=[evaluation_methods[idx] for idx in thinking_indices],
                 trace_id=trace_id,
                 round_id=round_id,
+                tests=[code_tests[idx] for idx in thinking_indices],
+                entry_points=[code_entry_points[idx] for idx in thinking_indices],
             )
             final_thinking_judgements = {
                 original_idx: judgement
@@ -449,7 +485,13 @@ def tag_questions_by_pass_rate(
             correct = bool(judgement.get("correct"))
             if correct:
                 pass_counts[idx] += 1  # 答对，累加
-            dynamic_difficulty = rollout_stage_to_dynamic_difficulty(rollout_stages[idx], correct)
+            # Code-domain difficulty is defined ONLY by test execution results
+            # (all pass=easy, partial=medium, all fail=hard, no test=unknown),
+            # returned by the code judge. Math items keep the cascade-stage rule.
+            if evaluation_methods[idx] == EVALUATION_METHOD_CODE_EXEC and judgement.get("difficulty"):
+                dynamic_difficulty = str(judgement.get("difficulty"))
+            else:
+                dynamic_difficulty = rollout_stage_to_dynamic_difficulty(rollout_stages[idx], correct)
             per_question_difficulties[idx] = dynamic_difficulty
 
             # 记录本次 rollout 的详细信息

@@ -11,7 +11,16 @@ from collections.abc import Iterable
 from importlib import import_module
 from typing import Protocol, cast
 
-from config.settings import DATASET_SHARD_COUNT, DATASET_SHARD_SIZE, SEARCH_DATASET_REPO_LIMIT, SEARCH_FALLBACK_DATASETS, SEARCH_FALLBACK_MODE
+from config.settings import (
+    BENCHMARK_DATASET_ID,
+    BENCHMARK_SPLIT,
+    DATASET_SHARD_COUNT,
+    DATASET_SHARD_SIZE,
+    DOMAIN,
+    SEARCH_DATASET_REPO_LIMIT,
+    SEARCH_FALLBACK_DATASETS,
+    SEARCH_FALLBACK_MODE,
+)
 from src.tools.search_query import is_difficulty_only_search_query
 
 
@@ -122,9 +131,24 @@ def search_hf_datasets(
     """
     limit = dataset_repo_limit or SEARCH_DATASET_REPO_LIMIT
 
+    # Code-domain: always make the local code benchmark available as a training-
+    # data source, regardless of HF search results. The dataset_reviewer auto-
+    # accepts it with a passthrough cleaner (no LLM/DeepSeek cleaner provider
+    # needed). This guarantees the code smoke loop has training data.
+    local_code_refs: list[dict] = []
+    if DOMAIN == "code" and BENCHMARK_DATASET_ID:
+        from pathlib import Path
+        if Path(BENCHMARK_DATASET_ID).expanduser().exists():
+            local_code_refs.append({
+                "dataset_id": BENCHMARK_DATASET_ID,
+                "source": "local_code",
+                "subset": None,
+                "split": BENCHMARK_SPLIT or "train",
+            })
+
     if is_difficulty_only_search_query(query):
         print(f"[hf_search] Skipping difficulty-only query='{query}'")
-        return []
+        return list(local_code_refs)
 
     datasets = _hf_api_search(query, limit)
 
@@ -149,7 +173,7 @@ def search_hf_datasets(
             print(f"[hf_search] Multi-query expansion: {len(datasets)} unique datasets across queries")
 
     if datasets:
-        return datasets
+        return local_code_refs + datasets
 
     if SEARCH_FALLBACK_MODE == "predefined" and SEARCH_FALLBACK_DATASETS:
         fallback_entries = [ds.strip() for ds in SEARCH_FALLBACK_DATASETS.split(",") if ds.strip()]
@@ -165,7 +189,7 @@ def search_hf_datasets(
                 "split": split,
             })
         print(f"[hf_search] Fallback (predefined): returning {len(datasets)} datasets: {[d['dataset_id'] for d in datasets]}")
-        return datasets
+        return local_code_refs + datasets
 
     print("[hf_search] Fallback (empty): no datasets available offline")
-    return []
+    return list(local_code_refs)

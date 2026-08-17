@@ -676,3 +676,245 @@ DEFAULT_AGENT_PROMPTS.update({
     "resource_adapt": RESOURCE_ADAPT_PROMPT,
     "training_hyperparams": TRAINING_HYPERPARAMS_PROMPT,
 })
+
+
+# =============================================================================
+# Code-domain prompts (DOMAIN=code)
+# =============================================================================
+# Principles:
+#   * Code tasks only search for data that ships with executable tests.
+#   * Reviewer accepts only (question + reference code + test + entry_point).
+#   * Difficulty is defined ONLY by test execution results.
+#   * Evaluator scores 0/1 by execution only — no LLM subjective judgment.
+#   * Small data prefers LoRA.
+# These override the math defaults when DOMAIN=code (see get_agent_prompt).
+# =============================================================================
+
+INSTRUCTION_DESIGNER_CODE_PROMPT = """
+你是指令前缀设计师。只输出 JSON。
+输出字段: instruction_prefix。
+要求: 1 条简短英文/中文前缀，指示模型写出可执行 Python 代码（只输出代码，不要解释）；20 字以内；以“：”或“。”结尾。
+"""
+
+TEACHING_TEACHER_SEARCH_QUERY_CODE_PROMPT = """
+你在生成训练数据的内容关键词。
+
+做什么：
+- 看 goal，输出 2-4 个英文关键词。
+- 只搜「带测试」的代码数据：programming problems with tests / coding problems / python function tests。
+
+不要做什么：
+- 不要写 HuggingFace / HF / dataset / data / search。
+- 不要写 math / reasoning。
+- 不要解释。
+
+只输出 JSON: {"search_query":"..."}
+"""
+
+SEARCH_EXPERT_CODE_PROMPT = """
+你在把目标改成数据内容关键词。
+
+做什么：
+- 输出 2-4 个小写英文关键词。
+- 只描述「带测试的代码题」：coding problems / python function tests / programming problems with tests。
+- search_sources 用 ["huggingface"]。
+
+搜索复用规则（通用）：
+- 检查 previous_search_feedback。
+- new_result_count == 0：换不同的英文关键词。
+
+不要做什么：
+- 不要写 HuggingFace / HF / dataset / data / search / math。
+- 不要输出句子、markdown、解释、<think>。
+
+只输出 JSON: {"search_query":"...","search_sources":["huggingface"],"reason":"..."}
+"""
+
+DATASET_REVIEWER_CODE_PROMPT = """
+你是代码领域数据集审查员。只 accept「题面 + 参考代码 + 测试 + entry_point」齐全的代码题数据。
+
+判断规则：
+1. 真实样本必须同时包含：题面（question/problem/input）、参考代码（answer/solution/output）、测试代码（test，含 def check(candidate) 或 assert）、entry_point（函数名）。
+2. 缺测试或缺 entry_point 的数据必须 reject。
+3. 测试必须是可执行的（def check(candidate): assert ...），不能是纯文本描述。
+4. 只 accept 单一函数级别的 Python 代码题，不 accept 大型项目/SQL/纯文本说明。
+5. 题面被参考代码或对话污染的数据必须 reject。
+
+输出 JSON 字段:
+- verdict: "accept" / "reject"
+- reason: 一句话说明（中文，≤20词）
+- suitability_score: 0.0 到 1.0
+- row_id_source: 样本唯一标识列名；没有则 null
+"""
+
+DATASET_INSPECTOR_CODE_PROMPT = """
+仅输出 JSON，不要解释。
+你是代码数据集 schema 解释器。阅读列名和前几条样本，输出与 filter/rollout/trainer 对齐的数据语义。
+输出 JSON 字段:
+- question_text_source: 题面列名（从 available_columns 选一个）
+- rollout_gold_source: 参考代码列名（从 available_columns 选一个）
+- train_output_source: 训练输出列名（通常与参考代码列相同）
+- target_style: 只能是 "answer"（代码题直接输出函数代码）
+- dedup_key_source: 去重键列名（通常与题面一致）
+- row_id_source: 逐行唯一身份列名；没有则 null
+- test_source: 测试代码列名（def check(candidate)），从 available_columns 选一个
+- entry_point_source: 入口函数名列名，从 available_columns 选一个
+- usable: true/false
+- reason: 一句话说明（中文，≤30词）
+规则:
+1. question_text_source 必须是完整题面。
+2. test_source 必须是可执行测试代码列（含 assert/check）。
+3. entry_point_source 必须是函数名列。
+4. 缺 test 或 entry_point 列时 usable=false。
+"""
+
+PROMPT_TEMPLATE_CODE_PROMPT = """
+你是提示词模板设计师。只输出 JSON。
+context.field_name 只会是 prompt_template 或 response_template。
+如果 field_name=prompt_template：生成简洁 instruction 模板，指示写出 Python 函数代码，只保留 1 个 {question_col} 占位符。
+如果 field_name=response_template：仅在多答案列时输出答案模板，按 answer_cols 顺序拼接。
+要求: 模板短、具体、可直接 format；不要输出无关字段、markdown 或解释。
+"""
+
+DIFFICULTY_TEACHER_CODE_PROMPT = """
+你是难度教师。代码题难度只按测试执行结果定义，禁止按题面长度或主观判断。
+输出 JSON 字段: accept_batch, target_difficulty, dataset_policy_hint, difficulty_weights, reason。
+难度规则（只看测试执行）：
+- 全部测试通过 = easy
+- 部分测试通过 = medium
+- 全部测试失败 = hard
+- 无可执行测试 = unknown
+"""
+
+EVALUATOR_JUDGE_CODE_PROMPT = """
+你是代码答案裁判。正确性只由执行测试决定：全部测试通过=1，任一失败/超时/编译错误/异常=0。
+禁止主观判断行为等价，禁止给部分分。
+只输出 JSON 字段: result_score (0 或 1), step_score (0 或 1), total_score (0 或 1), reason。
+分数只能是 0 或 1。
+"""
+
+DATA_BUILDER_CODE_PROMPT = """
+你是代码题组装大师。根据动态难度比例、模块比例和回放池比例，决定训练集、cotest、test、probe 的组装倾向。
+输出 JSON 字段: difficulty_weights, module_weights, replay_sample_ratio, reason。
+规则: 代码题难度只按测试执行结果定义；训练目标是可执行函数代码。
+"""
+
+ACTION_SELECT_FINETUNE_CODE_PROMPT = """
+你是微调类型选择器。根据当前阶段和 rollback_streak，决定用 full 还是 lora 微调。
+输出 JSON 字段: finetuning_type ("full" | "lora")。
+规则: 代码数据量小，优先 lora（防止遗忘、适合小数据）。
+"""
+
+TRAINING_HYPERPARAMS_CODE_PROMPT = """
+你是训练超参数调节器。代码领域小数据优先 LoRA 微调。
+输出 JSON 字段:
+- per_device_train_batch_size: 1 到 2 的整数；小数据用 1
+- learning_rate: lora 通常 5e-5 到 3e-4
+- num_train_epochs: 1 到 3 整数
+- gradient_accumulation_steps: 1 到 32 整数
+- lr_scheduler_type: cosine/linear/constant
+- warmup_mode: ratio 或 steps
+- warmup_value: warmup_mode=ratio 时 0.0 到 0.2
+- reason: 一句话
+规则:
+- 代码数据量小(<100): 用 lora，batch_size=1，epochs 1-3
+- 如果 training_summary.status=failed：读 failure_kind/failure_reason，保守恢复
+- loss 下降但 evaluator 不升时，不要简单加 epoch，优先 lora + 数据刷新
+"""
+
+PROMPT_DESIGNER_DOMAIN_GOAL_CODE_PROMPT = """
+你是领域目标子决策器。只输出 JSON。
+输出字段: domain_goal。
+要求: 1 个简短英文短语，最多 10 词，描述代码能力目标（如 "write python functions passing tests"）。
+"""
+
+PROMPT_DESIGNER_CAPABILITIES_CODE_PROMPT = """
+你是能力点子决策器。只输出 JSON。
+输出字段: target_capabilities。
+要求: 3 到 5 个英文能力短语，如 "function implementation", "test passing", "python syntax"。
+"""
+
+PROMPT_DESIGNER_KEYWORDS_CODE_PROMPT = """
+你是搜索关键词子决策器。只输出 JSON。
+输出字段: search_keywords。
+要求: 5 到 8 个小写英文关键词，只描述「带测试的代码题」，如 coding problems, python tests, function implementation。
+"""
+
+PROMPT_DESIGNER_BOUNDARY_CODE_PROMPT = """
+你是边界信号子决策器。只输出 JSON。
+输出字段: boundary_signals。
+要求: 3 到 5 个英文短语，描述代码题策略调整边界，如 "tests missing", "syntax errors", "compile failures"。
+"""
+
+PROMPT_DESIGNER_RARE_CODE_PROMPT = """
+你是稀有信号子决策器。只输出 JSON。
+输出字段: rare_signals。
+要求: 3 到 5 个英文短语，描述代码题边缘情况，如 "edge case tests", "recursive functions", "string manipulation"。
+"""
+
+PROMPT_DESIGNER_LABELS_CODE_PROMPT = """
+你是分类标签子决策器。只输出 JSON。
+context.field_name 只会是 classifier_labels 或 classifier_label_notes。
+如果 field_name=classifier_labels：输出 5 到 8 个英文代码题类型标签，加一个 unknown；如 arithmetic, string, list, logic, recursion, unknown。
+如果 field_name=classifier_label_notes：为每个标签写 1 句短英文说明。
+只输出被指定的那个字段。
+"""
+
+
+# Registry of code-domain prompt overrides. When DOMAIN=code, these replace the
+# math defaults in the agent prompt pack (see get_agent_prompt).
+CODE_DOMAIN_PROMPTS: dict[str, str] = {
+    "instruction_designer": INSTRUCTION_DESIGNER_CODE_PROMPT,
+    "teaching_teacher.search_query": TEACHING_TEACHER_SEARCH_QUERY_CODE_PROMPT,
+    "search_expert": SEARCH_EXPERT_CODE_PROMPT,
+    "dataset_reviewer": DATASET_REVIEWER_CODE_PROMPT,
+    "dataset_inspector": DATASET_INSPECTOR_CODE_PROMPT,
+    "prompt_template": PROMPT_TEMPLATE_CODE_PROMPT,
+    "difficulty_teacher": DIFFICULTY_TEACHER_CODE_PROMPT,
+    "evaluator_judge": EVALUATOR_JUDGE_CODE_PROMPT,
+    "data_builder": DATA_BUILDER_CODE_PROMPT,
+    "action_selector.finetune": ACTION_SELECT_FINETUNE_CODE_PROMPT,
+    "training_hyperparams": TRAINING_HYPERPARAMS_CODE_PROMPT,
+    "prompt_designer.domain_goal": PROMPT_DESIGNER_DOMAIN_GOAL_CODE_PROMPT,
+    "prompt_designer.capabilities": PROMPT_DESIGNER_CAPABILITIES_CODE_PROMPT,
+    "prompt_designer.keywords": PROMPT_DESIGNER_KEYWORDS_CODE_PROMPT,
+    "prompt_designer.boundary": PROMPT_DESIGNER_BOUNDARY_CODE_PROMPT,
+    "prompt_designer.rare": PROMPT_DESIGNER_RARE_CODE_PROMPT,
+    "prompt_designer.labels": PROMPT_DESIGNER_LABELS_CODE_PROMPT,
+}
+
+
+def get_agent_prompt(agent_name: str, default_prompt: str, domain: str | None = None) -> str:
+    """Return the domain-specific prompt for ``agent_name``.
+
+    When ``domain`` (or the ``DOMAIN`` env/setting) is ``"code"`` and a code
+    override exists, it is returned; otherwise the math default is returned.
+    """
+    if domain is None:
+        try:
+            from config.settings import DOMAIN as _DOMAIN
+            domain = _DOMAIN
+        except Exception:
+            domain = "math"
+    if str(domain).strip().lower() == "code" and agent_name in CODE_DOMAIN_PROMPTS:
+        return CODE_DOMAIN_PROMPTS[agent_name]
+    return default_prompt
+
+
+def build_agent_prompt_pack(domain: str | None = None) -> dict[str, str]:
+    """Build the full agent prompt registry for a domain.
+
+    Code-domain overrides replace the math defaults where defined; all other
+    agents keep the math defaults. Used by prompt_designer to assemble the pack.
+    """
+    pack = dict(DEFAULT_AGENT_PROMPTS)
+    if domain is None:
+        try:
+            from config.settings import DOMAIN as _DOMAIN
+            domain = _DOMAIN
+        except Exception:
+            domain = "math"
+    if str(domain).strip().lower() == "code":
+        for name, prompt in CODE_DOMAIN_PROMPTS.items():
+            pack[name] = prompt
+    return pack
