@@ -207,6 +207,17 @@ def _normalize_training_safety(hyperparams: dict) -> dict:
         except (TypeError, ValueError):
             batch_size = 1
         normalized["per_device_train_batch_size"] = min(2, max(1, batch_size))
+    elif finetuning_type == "lora":
+        # LoRA safety: full-finetune learning rates (1e-6 to 1e-5) are too low
+        # for LoRA to converge. This is a domain-knowledge floor, not an
+        # override — the LLM's decision is preserved when it is in a valid
+        # LoRA range (1e-5 to 1e-3).
+        try:
+            lr = float(normalized.get("learning_rate", 0))
+        except (TypeError, ValueError):
+            lr = 0
+        if 0 < lr < 1e-5:
+            normalized["learning_rate"] = 2e-4
     return normalized
 
 
@@ -294,7 +305,7 @@ def _decide_training_hyperparams(
     prompt_state: dict[str, Any] = dict(state)
     decision = decide_json(
         agent_name="parameter_master.training_hyperparams",
-        prompt=prompt_for_agent(prompt_state, "parameter_master", TRAINING_HYPERPARAMS_PROMPT),
+        prompt=prompt_for_agent(prompt_state, "training_hyperparams", TRAINING_HYPERPARAMS_PROMPT),
         context={
             "round_id": state.get("round_id", 0),
             "current_hyperparams": training_hyperparams,
@@ -303,6 +314,7 @@ def _decide_training_hyperparams(
             "forgetting_delta": metrics_after.get("forgetting_delta", 0.0),
             "training_summary": metrics_after.get("training_summary", {}),
             "round_data_stats": state.get("round_data_stats") or {},
+            "finetuning_type": protected_finetuning_type,
         },
         fallback=training_hyperparams,
         trace_id=state.get("trace_id", ""),
@@ -448,6 +460,12 @@ def _ensure_lora_defaults(hyperparams: dict) -> None:
     from config.settings import LORA_ALPHA, LORA_RANK
     hyperparams.setdefault("lora_rank", LORA_RANK)
     hyperparams.setdefault("lora_alpha", LORA_ALPHA)
+    # LoRA needs a higher learning rate than full finetune and enough epochs
+    # to converge on small datasets. These are starting defaults — the
+    # parameter_master LLM can override them based on eval feedback.
+    hyperparams.setdefault("learning_rate", 2e-4)
+    hyperparams.setdefault("num_train_epochs", 5)
+    hyperparams.setdefault("gradient_accumulation_steps", 1)
 
 
 def _state_int(state: EvoState, key: str, fallback: int) -> int:

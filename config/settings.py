@@ -147,10 +147,6 @@ LORA_RANK = int(os.getenv("LORA_RANK", "8"))
 LORA_ALPHA = int(os.getenv("LORA_ALPHA", "16"))
 LORA_DROPOUT = float(os.getenv("LORA_DROPOUT", "0.05"))
 LORA_TARGET_MODULES = os.getenv("LORA_TARGET_MODULES", "q_proj,v_proj")
-# LoRA needs a much higher learning rate than full finetune (5e-6). The
-# parameter_master may emit a full-finetune rate; we clamp LoRA to this floor.
-LORA_LEARNING_RATE = float(os.getenv("LORA_LEARNING_RATE", "1e-4"))
-LORA_NUM_EPOCHS = float(os.getenv("LORA_NUM_EPOCHS", "5"))
 
 
 # =============================================================================

@@ -892,9 +892,9 @@ Evaluator 是结果信号；loss/LR 只用于诊断训练机制。
 代码数据通常量小，优先 lora，batch_size 用 1，学习率 lora 通常 5e-5 到 3e-4。
 输出 JSON 字段:
 - per_device_train_batch_size: 每设备批次大小。full finetune 必须是 1到2 的整数；lora 用 1。不确定时输出 1
-- learning_rate: 学习率。full 通常 1e-6 到 8e-6；lora 通常 5e-5 到 3e-4
-- num_train_epochs: 训练轮数 (1 到 5, 整数)
-- gradient_accumulation_steps: 梯度累积步数 (1 到 64, 整数)
+- learning_rate: 学习率。**lora 必须输出 5e-5 到 3e-4 之间的值**（如 2e-4）；full 通常 1e-6 到 8e-6。lora 不要输出低于 1e-5 的学习率，否则模型学不到东西。
+- num_train_epochs: 训练轮数 (1 到 10, 整数)。小数据（<50样本）建议 5 到 10。
+- gradient_accumulation_steps: 梯度累积步数 (1 到 64, 整数)。lora 小数据建议 1，让每条样本都是一个优化步。
 - lr_scheduler_type: 调度器 (cosine/linear/constant/constant_with_warmup/polynomial)
 - warmup_mode: ratio 或 steps
 - warmup_value: warmup_mode=ratio 时为 0.0 到 0.2；warmup_mode=steps 时为非负整数 step
@@ -902,11 +902,13 @@ Evaluator 是结果信号；loss/LR 只用于诊断训练机制。
 - warmup_steps: 可选
 - reason: 一句话说明调整理由
 规则:
-- 代码小数据优先 lora，batch_size=1，用 gradient_accumulation_steps 补偿吞吐
+- 代码小数据优先 lora，batch_size=1，gradient_accumulation_steps=1（让每条样本都是优化步）
+- **lora 学习率必须在 5e-5 到 3e-4 之间**，典型值 2e-4。不要用 full finetune 的低学习率（5e-6）。
 - 如果 training_summary.status=failed：先读 failure_kind/failure_reason；CUDA OOM 时必须输出 batch_size=1
 - 如果 training_summary.status=success：输出 reason 中写 success
 - loss_diagnosis=underfit: 可略增 epochs 或略增学习率
 - loss_diagnosis=overfit: 不要增加 epochs；降低更新强度，增加 replay，优先 lora
+- 如果 probe_acc 或 frozen_probe_acc 没有提升：可增加 epochs 或学习率
 - warmup_ratio 与 warmup_steps 不要同时主动输出；优先输出 warmup_mode + warmup_value
 """
 

@@ -57,8 +57,6 @@ export LORA_RANK=16
 export LORA_ALPHA=32
 export LORA_DROPOUT=0.05
 export LORA_TARGET_MODULES=q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj
-export LORA_LEARNING_RATE=5e-4
-export LORA_NUM_EPOCHS=10
 export TRAINING_TIMEOUT_SECONDS=1800
 
 # ============================================================================
