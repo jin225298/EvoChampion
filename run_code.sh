@@ -58,8 +58,6 @@ export CODE_JUDGE_TIMEOUT_SECONDS="${CODE_JUDGE_TIMEOUT_SECONDS:-10}"
 export CODE_JUDGE_MEMORY_MB="${CODE_JUDGE_MEMORY_MB:-512}"
 export CODE_JUDGE_CPU_SECONDS="${CODE_JUDGE_CPU_SECONDS:-15}"
 export CODE_JUDGE_MAX_WORKERS="${CODE_JUDGE_MAX_WORKERS:-8}"
-export CODE_JUDGE_DEBUG="${CODE_JUDGE_DEBUG:-1}"
-export CODE_JUDGE_USE_CACHE="${CODE_JUDGE_USE_CACHE:-0}"
 
 # ---------------------------------------------------------------------------
 # HF / cache layout (all under /data2)

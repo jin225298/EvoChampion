@@ -345,10 +345,6 @@ def run_sandboxed(
     stderr = _decode(stderr_b)
     error_type, error_message = _classify_error(returncode, stderr, timed_out)
     passed = (not timed_out) and returncode == 0 and error_type == "none"
-    if os.getenv("CODE_JUDGE_DEBUG", "").strip():
-        print(f"[run_sandboxed_debug] rc={returncode} timed_out={timed_out} "
-              f"err={error_type} stderr_len={len(stderr)} "
-              f"stderr_tail={stderr[-120:]!r}", flush=True)
     return {
         "passed": passed,
         "error_type": error_type,
@@ -420,8 +416,6 @@ def judge_code_candidate(
         with _CACHE_LOCK:
             cached = _CACHE.get(key)
         if cached is not None:
-            if os.getenv("CODE_JUDGE_DEBUG", "").strip():
-                print(f"[code_judge_debug] CACHE HIT key={key[:12]} passed={cached.passed} err={cached.error_type}", flush=True)
             return cached
 
     harness = build_harness(candidate_code, test_code, entry_point)
@@ -569,30 +563,6 @@ def judge_predictions_code_batch(
             candidate_code, test_code, entry_point,
             timeout=timeout, memory_mb=memory_mb,
         )
-        import os as _os
-        if _os.getenv("CODE_JUDGE_DEBUG", "").strip():
-            _h = build_harness(candidate_code, test_code, entry_point)
-            _o = run_sandboxed(_h, timeout=timeout, memory_mb=memory_mb)
-            import hashlib as _hl
-            _ch = _hl.sha256(candidate_code.encode("utf-8","replace")).hexdigest()[:12]
-            _hh = _hl.sha256(_h.encode("utf-8","replace")).hexdigest()[:12]
-            try:
-                import sys as _sys
-                _dumpp = f"/data2/group_何向南/kang/13645-dendrite/code_judge_debug/harness_{idx}_{_hh}.py"
-                import os as _os2
-                _os2.makedirs(_os2.path.dirname(_dumpp), exist_ok=True)
-                with open(_dumpp, "w") as _df:
-                    _df.write(_h)
-                _dumpp = f"{_dumpp} exe={_sys.executable}"
-            except Exception as _e:
-                _dumpp = f"<dump-failed:{_e}>"
-            print(f"[code_judge_debug] idx={idx} ep={entry_point!r} "
-                  f"cp_len={len(completion_prompt)} pred_len={len(pred)} "
-                  f"test_len={len(test_code or '')} passed={result.passed} "
-                  f"err={result.error_type} rc={result.returncode} "
-                  f"direct_passed={_o['passed']} direct_rc={_o['returncode']} "
-                  f"cand_hash={_ch} harness_hash={_hh} dump={_dumpp} "
-                  f"stderr_tail={result.stderr[-100:]!r}", flush=True)
         return idx, result
 
     if workers == 1:
