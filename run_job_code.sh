@@ -4,14 +4,14 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=12:00:00
 #SBATCH --job-name=evochampion-code
-#SBATCH --output=log/code_job_%j.out
-#SBATCH --error=log/code_job_%j.err
+#SBATCH --output=/data2/group_何向南/kang/13643-ferrite/log/code_job_%j.out
+#SBATCH --error=/data2/group_何向南/kang/13643-ferrite/log/code_job_%j.err
 #SBATCH --mem=128G
 
 set -Eeuo pipefail
 
-# ── Auto-detect project directory from script location ──
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ── Project directory (hardcoded for this deployment) ──
+PROJECT_DIR="/data2/group_何向南/kang/13643-ferrite"
 ENV_FILE="${PROJECT_DIR}/.env"
 RUN_SCRIPT="${PROJECT_DIR}/run_code.sh"
 CONDA_SH="${CONDA_SH:-/home/kang/miniconda3/etc/profile.d/conda.sh}"
