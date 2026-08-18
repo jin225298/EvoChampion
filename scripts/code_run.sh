@@ -40,11 +40,11 @@ export BENCHMARK_FORMAT=generic
 # Small smoke scale (1 round, 8 questions)
 # ============================================================================
 export MAX_ROUNDS=1
-export FILTER_TARGET_QUESTIONS_PER_ROUND=16
-export SCREENING_ENTRY_MAX_QUESTIONS=16
-export DATASET_PROFILE_WINDOW_SIZE=16
+export FILTER_TARGET_QUESTIONS_PER_ROUND=30
+export SCREENING_ENTRY_MAX_QUESTIONS=30
+export DATASET_PROFILE_WINDOW_SIZE=30
 export MAX_PROFILE_WINDOWS_PER_ROUND=1
-export MAX_PROFILE_ITEMS_PER_ROUND=16
+export MAX_PROFILE_ITEMS_PER_ROUND=30
 export HOLDOUT_EVAL_SIZE=8
 export ROLLOUT_TIMES=4
 export ROLLOUT_MAX_CONCURRENT=2
@@ -53,12 +53,12 @@ export ROLLOUT_MAX_CONCURRENT=2
 # Training: LoRA (small data, anti-forgetting)
 # ============================================================================
 export TRAIN_FINETUNING_TYPE=lora
-export LORA_RANK=8
-export LORA_ALPHA=16
+export LORA_RANK=16
+export LORA_ALPHA=32
 export LORA_DROPOUT=0.05
 export LORA_TARGET_MODULES=q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj
-export LORA_LEARNING_RATE=2e-4
-export LORA_NUM_EPOCHS=5
+export LORA_LEARNING_RATE=5e-4
+export LORA_NUM_EPOCHS=10
 export TRAINING_TIMEOUT_SECONDS=1800
 
 # ============================================================================

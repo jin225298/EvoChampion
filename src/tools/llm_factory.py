@@ -492,6 +492,10 @@ def _load_and_patch_config(
         current_epochs = config.get("num_train_epochs", 0)
         if isinstance(current_epochs, (int, float)) and current_epochs < LORA_NUM_EPOCHS:
             config["num_train_epochs"] = LORA_NUM_EPOCHS
+        # Small code dataset: use grad_accum=1 so every example is an
+        # optimization step (the parameter master's grad_accum=8 would give
+        # <1 step per epoch on ~10 training examples).
+        config["gradient_accumulation_steps"] = 1
 
     if eval_dataset_name:
         config["eval_dataset"] = eval_dataset_name
