@@ -567,11 +567,16 @@ def judge_predictions_code_batch(
         )
         import os as _os
         if _os.getenv("CODE_JUDGE_DEBUG", "").strip():
+            # Also call run_sandboxed directly to isolate the discrepancy.
+            _h = build_harness(candidate_code, test_code, entry_point)
+            _o = run_sandboxed(_h, timeout=timeout, memory_mb=memory_mb)
             print(f"[code_judge_debug] idx={idx} ep={entry_point!r} "
                   f"cp_len={len(completion_prompt)} pred_len={len(pred)} "
                   f"test_len={len(test_code or '')} passed={result.passed} "
-                  f"err={result.error_type} cand_head={candidate_code[:120]!r} "
-                  f"stderr_tail={result.stderr[-150:]!r}", flush=True)
+                  f"err={result.error_type} rc={result.returncode} "
+                  f"direct_passed={_o['passed']} direct_rc={_o['returncode']} "
+                  f"direct_err={_o['error_type']} "
+                  f"stderr_tail={result.stderr[-120:]!r}", flush=True)
         return idx, result
 
     if workers == 1:
