@@ -2,7 +2,7 @@ import time
 import json
 from pathlib import Path
 
-from config.settings import BASE_MODEL_NAME, TRAINING_CONFIG_TEMPLATE, get_session_dir
+from config.settings import BASE_MODEL_NAME, TRAINING_CONFIG_TEMPLATE, TRAIN_FINETUNING_TYPE, LORA_RANK, LORA_ALPHA, get_session_dir
 from src.models.messages import (
     AgentName,
     DatasetBundlePayload,
@@ -173,17 +173,17 @@ def trainer_node(state: EvoState) -> dict:
     finetuning_type = str(
         training_hyperparams.pop("finetuning_type", None)
         or action_metadata.get("finetuning_type")
-        or "full"
+        or TRAIN_FINETUNING_TYPE
     )
     lora_rank = int(
         training_hyperparams.pop("lora_rank", None)
         or action_metadata.get("lora_rank")
-        or 0
+        or (LORA_RANK if finetuning_type == "lora" else 0)
     )
     lora_alpha = int(
         training_hyperparams.pop("lora_alpha", None)
         or action_metadata.get("lora_alpha")
-        or 0
+        or (LORA_ALPHA if finetuning_type == "lora" else 0)
     )
     packing = training_hyperparams.pop("packing", None)
     if packing is None:
