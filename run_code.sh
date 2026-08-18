@@ -143,7 +143,7 @@ export TRAIN_FINETUNING_TYPE=lora
 export BASE_MODEL_NAME=Qwen/Qwen3-0.6B
 export CHAMPION_MODEL_PATH=Qwen/Qwen3-0.6B
 export AGENT_BASE_MODEL_NAME=Qwen/Qwen3-0.6B
-export CANDIDATE_RETENTION_KEEP_RECENT_NON_PROMOTED=2
+export CANDIDATE_RETENTION_KEEP_RECENT_NON_PROMOTED=0
 # Space-efficient: save only model weights (no optimizer state) and keep just
 # one checkpoint, so the small LoRA candidate + merged model fit the quota.
 export TRAIN_SAVE_ONLY_MODEL=true
