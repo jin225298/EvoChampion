@@ -39,7 +39,7 @@ export BENCHMARK_FORMAT=generic
 # ============================================================================
 # Small smoke scale (1 round, 8 questions)
 # ============================================================================
-export MAX_ROUNDS=1
+export MAX_ROUNDS=2
 export FILTER_TARGET_QUESTIONS_PER_ROUND=30
 export SCREENING_ENTRY_MAX_QUESTIONS=30
 export DATASET_PROFILE_WINDOW_SIZE=30
