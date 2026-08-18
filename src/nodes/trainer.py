@@ -2,7 +2,7 @@ import time
 import json
 from pathlib import Path
 
-from config.settings import BASE_MODEL_NAME, TRAINING_CONFIG_TEMPLATE, get_session_dir
+from config.settings import BASE_MODEL_NAME, TRAINING_CONFIG_TEMPLATE, TRAIN_FINETUNING_TYPE, get_session_dir
 from src.models.messages import (
     AgentName,
     DatasetBundlePayload,
@@ -173,8 +173,13 @@ def trainer_node(state: EvoState) -> dict:
     finetuning_type = str(
         training_hyperparams.pop("finetuning_type", None)
         or action_metadata.get("finetuning_type")
+        or TRAIN_FINETUNING_TYPE
         or "full"
     )
+    # Code domain: force the configured finetuning type (lora) so the small
+    # model learns on the tiny code dataset with a LoRA-appropriate learning rate.
+    if TRAIN_FINETUNING_TYPE:
+        finetuning_type = TRAIN_FINETUNING_TYPE
     lora_rank = int(
         training_hyperparams.pop("lora_rank", None)
         or action_metadata.get("lora_rank")
