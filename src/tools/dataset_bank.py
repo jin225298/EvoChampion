@@ -229,7 +229,7 @@ def build_probe_from_bank(rows: list[dict]) -> dict[str, list[dict]]:
 
     grouped: dict[str, list[dict]] = {}
     for row in selected:
-        grouped.setdefault(row.get("module", "unknown"), []).append({
+        probe_item = {
             "question_id": row.get("question_id", ""),
             "question_text": row.get("question_text", ""),
             "gold_answer": row.get("gold_answer", ""),
@@ -239,5 +239,15 @@ def build_probe_from_bank(rows: list[dict]) -> dict[str, list[dict]]:
             "source_dataset_id": row.get("source_dataset_id", f"{BENCHMARK_DATASET_ID}/{BENCHMARK_SPLIT}"),
             "source_dataset_row_id": row.get("source_dataset_row_id"),
             "module": row.get("module", "unknown"),
-        })
+        }
+        # Preserve code domain fields (test, entry_point)
+        import os
+        if os.getenv("DOMAIN", "").strip().lower() == "code":
+            test_code = row.get("test", "")
+            entry_point = row.get("entry_point", "")
+            if test_code:
+                probe_item["test"] = test_code
+            if entry_point:
+                probe_item["entry_point"] = entry_point
+        grouped.setdefault(row.get("module", "unknown"), []).append(probe_item)
     return grouped
