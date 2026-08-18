@@ -99,7 +99,7 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 # training here via the search fallback.
 export SEARCH_FALLBACK_MODE=predefined
 export SEARCH_FALLBACK_DATASETS="${BENCHMARK_DATASET_ID}::train"
-export SEARCH_DATASET_REPO_LIMIT=0
+export SEARCH_DATASET_REPO_LIMIT=1
 export SEARCH_TIMEOUT_SECONDS=30
 
 # Review / screening — fast for the smoke set.
