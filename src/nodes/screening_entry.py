@@ -1,3 +1,4 @@
+import os
 import time
 from collections import Counter
 
@@ -23,7 +24,7 @@ from config.settings import (
     SCREENING_ENTRY_MAX_QUESTIONS,
     get_classifier_labels,
 )
-from src.tools.dataset_adapter import load_hf_dataset_with_fallback
+from src.tools.dataset_adapter import load_hf_dataset_with_fallback, normalize_item, detect_schema
 from src.tools.dataset_bank import infer_module
 from src.tools.dataset_cleaner_codegen import apply_cleaner_to_rows
 from src.tools.dataset_state import DATASET_STATE_IN_USE
@@ -114,9 +115,74 @@ def _cleaner_failure_metadata(
     return metadata
 
 
+def _load_code_dataset_direct(
+    ref: dict, state: EvoState | dict | None = None
+) -> tuple[list[dict], dict]:
+    """Load a code dataset directly and standardize via normalize_item.
+
+    Code-with-tests datasets have an explicit schema (question/answer/test/
+    entry_point) and need no LLM-generated cleaner. This bypasses the cleaner
+    machinery so the local code benchmark (e.g. data/code_smoke) materializes
+    into training/rollout questions with test + entry_point preserved.
+    """
+    dataset_id = ref.get("dataset_id", "unknown")
+    subset = ref.get("subset")
+    split = ref.get("split") or "train"
+    offset, limit = _window_bounds_from_ref(ref, state)
+    try:
+        dataset = load_hf_dataset_with_fallback(dataset_id, subset, split, streaming=False)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        print(f"[screening_entry] Failed to load {dataset_id}: {error}")
+        metadata = _window_metadata(ref, offset, limit, 0)
+        metadata["load_error"] = error
+        metadata["failure_reason"] = error
+        return [], metadata
+
+    t_start = time.time()
+    schema = detect_schema(getattr(dataset, "features", None))
+    questions: list[dict] = []
+    for i, row in enumerate(dataset):
+        if i < offset:
+            continue
+        if len(questions) >= limit:
+            break
+        norm = normalize_item(
+            row,
+            schema,
+            i,
+            str(dataset_id),
+            source_dataset_split=str(split) if split is not None else None,
+        )
+        if norm is None:
+            continue
+        norm["added_round"] = int((state or {}).get("round_id", 0) or 0)
+        norm["module"] = infer_module(norm["question_text"])
+        questions.append(norm)
+
+    elapsed = time.time() - t_start
+    print(
+        f"[screening_entry] Loaded code window {offset}:{offset + limit} "
+        f"({len(questions)} questions) from {dataset_id} in {elapsed:.2f}s"
+    )
+    metadata = _window_metadata(ref, offset, limit, len(questions))
+    metadata["cleaner_required"] = False
+    if not questions:
+        metadata["failure_reason"] = "no_questions_loaded"
+    for q in questions:
+        q["dataset_window_id"] = metadata["window_id"]
+        q["dataset_window_offset"] = offset
+        q["dataset_window_limit"] = limit
+    return questions, metadata
+
+
 def _load_dataset_from_ref(ref: dict, schema_override: dict | None = None, state: EvoState | dict | None = None) -> tuple[list[dict], dict]:
     """Download and clean a single dataset reference with a validated cleaner."""
     dataset_id = ref.get("dataset_id", "unknown")
+    # Code-domain datasets have a clear schema (question/answer/test/entry_point)
+    # and need no LLM cleaner. Bypass the cleaner machinery.
+    if os.getenv("DOMAIN", "").strip().lower() == "code":
+        return _load_code_dataset_direct(ref, state)
     subset = ref.get("subset")
     split = ref.get("split") or "train"
     offset, limit = _window_bounds_from_ref(ref, state)
