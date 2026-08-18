@@ -437,6 +437,27 @@ def load_cached_hf_dataset(dataset_id: str, subset: str | None, split: str):
     return ds
 
 
+def load_dataset_smart(dataset_id: str, subset: str | None, split: str):
+    """Load any dataset — local directory, HF hub, or HF cache (offline).
+
+    Single dispatch point used by bootstrap, dataset_bank, and screening:
+    1. Local directory → ``load_hf_dataset_with_fallback`` (non-streaming).
+    2. HF dataset + offline → ``load_cached_hf_dataset`` (reads cached parquet).
+    3. HF dataset + online → ``load_hf_dataset_with_fallback``.
+    """
+    # Local directory: load directly (non-streaming).
+    if isinstance(dataset_id, str) and os.path.isdir(dataset_id):
+        return load_hf_dataset_with_fallback(dataset_id, subset, split, allow_hfd=False)
+    # HF dataset in offline mode: load from cached parquet/jsonl.
+    if os.getenv("HF_HUB_OFFLINE", "").strip().lower() in ("1", "true", "yes"):
+        try:
+            return load_cached_hf_dataset(dataset_id, subset, split)
+        except Exception:
+            pass  # fall through to normal load
+    # Normal online load.
+    return load_hf_dataset_with_fallback(dataset_id, subset, split, allow_hfd=False)
+
+
 def detect_schema(features: Any) -> dict[str, Any]:
     """从数据集的 features metadata 自动检测题目字段和答案字段。
 

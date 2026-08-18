@@ -31,7 +31,7 @@ from config.settings import (
     BENCHMARK_SUBSET,
     GLOBAL_PROBE_SIZE,
 )
-from src.tools.dataset_adapter import load_hf_dataset_with_fallback
+from src.tools.dataset_adapter import load_dataset_smart
 
 # 模块关键词映射：通过题目文本中出现的关键词推断数学题型
 _MODULE_KEYWORDS = {
@@ -144,7 +144,7 @@ def build_dataset_bank(session_dir: Path, dataset_id: str = None, subset: str = 
     if bank_path.exists():
         return bank_path
 
-    dataset = load_hf_dataset_with_fallback(ds_id, ds_subset, ds_split)
+    dataset = load_dataset_smart(ds_id, ds_subset, ds_split)
     rows: list[dict] = []
     for idx, item in enumerate(dataset):
         q = _normalize_item(item, idx, ds_split)

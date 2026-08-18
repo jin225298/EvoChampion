@@ -240,9 +240,9 @@ def _build_benchmark_holdout_probe_set(dataset_id: str, subset: str, split: str)
     Returns:
         扁平题目列表，长度不超过 GLOBAL_PROBE_SIZE
     """
-    from src.tools.dataset_adapter import load_hf_dataset_with_fallback
+    from src.tools.dataset_adapter import load_dataset_smart
 
-    dataset = load_hf_dataset_with_fallback(dataset_id, subset, split)
+    dataset = load_dataset_smart(dataset_id, subset, split)
     questions: list[dict] = []
     for idx, item in enumerate(dataset):
         q = _normalize_item(item, idx, split)
@@ -338,9 +338,9 @@ def build_frozen_probe_set(trace_id: str, global_probe_path: str) -> str:
     if FIXED_BENCHMARK_SOURCE == "benchmark_eval":
         try:
             from config.settings import BENCHMARK_DATASET_ID, BENCHMARK_EVAL_SPLIT, BENCHMARK_SUBSET
-            from src.tools.dataset_adapter import load_hf_dataset_with_fallback
+            from src.tools.dataset_adapter import load_dataset_smart
 
-            dataset = load_hf_dataset_with_fallback(
+            dataset = load_dataset_smart(
                 BENCHMARK_DATASET_ID,
                 BENCHMARK_SUBSET,
                 BENCHMARK_EVAL_SPLIT,

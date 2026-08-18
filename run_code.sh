@@ -90,19 +90,27 @@ export DATASET_REVIEW_ROWS_TIMEOUT_SECONDS="${DATASET_REVIEW_ROWS_TIMEOUT_SECOND
 export DATASET_REVIEW_STREAMING_TIMEOUT_SECONDS="${DATASET_REVIEW_STREAMING_TIMEOUT_SECONDS:-30}"
 
 # ---------------------------------------------------------------------------
-# Smoke-test scale (MAX_ROUNDS=1)
+# Training + evaluation scale
 # ---------------------------------------------------------------------------
-export MAX_ROUNDS=1
-export FILTER_TARGET_QUESTIONS_PER_ROUND=8
-export SCREENING_ENTRY_MAX_QUESTIONS=8
-export DATASET_PROFILE_WINDOW_SIZE=8
-export MAX_PROFILE_WINDOWS_PER_ROUND=1
-export MAX_PROFILE_ITEMS_PER_ROUND=8
-export HOLDOUT_EVAL_SIZE=4
-export ROLLOUT_TIMES="${ROLLOUT_TIMES:-2}"
+export MAX_ROUNDS=3
+export FILTER_TARGET_QUESTIONS_PER_ROUND=64
+export SCREENING_ENTRY_MAX_QUESTIONS=64
+export DATASET_PROFILE_WINDOW_SIZE=64
+export MAX_PROFILE_WINDOWS_PER_ROUND=2
+export MAX_PROFILE_ITEMS_PER_ROUND=128
+export DATASET_WINDOW_SIZE=128
+export HOLDOUT_EVAL_SIZE=20
+export ROLLOUT_TIMES="${ROLLOUT_TIMES:-4}"
 export ROLLOUT_MAX_NEW_TOKENS="${ROLLOUT_MAX_NEW_TOKENS:-1024}"
 export EVAL_MAX_NEW_TOKENS="${EVAL_MAX_NEW_TOKENS:-1024}"
-export INFERENCE_BATCH_SIZE="${INFERENCE_BATCH_SIZE:-64}"
+export INFERENCE_BATCH_SIZE="${INFERENCE_BATCH_SIZE:-128}"
+# Larger evaluation: 40-item frozen probe + 40-item global probe.
+export GLOBAL_PROBE_SIZE=40
+export FROZEN_PROBE_SIZE=40
+export PROBE_EVAL_MAX_ITEMS=40
+export EVAL_TEST_MAX_ITEMS=20
+export EVAL_COTEST_MAX_ITEMS=20
+export EVAL_MASTERED_MAX_ITEMS=20
 
 # ---------------------------------------------------------------------------
 # Judging: execution only. No LLM-as-judge in the code domain.
@@ -117,17 +125,16 @@ export CODE_EXEC_MAX_WORKERS="${CODE_EXEC_MAX_WORKERS:-8}"
 export CODE_EXEC_CACHE_ENABLED="${CODE_EXEC_CACHE_ENABLED:-1}"
 
 # ---------------------------------------------------------------------------
-# Benchmark: local code smoke dataset (train.json / test.json)
+# Benchmark: MBPP (real HF code dataset, 374 train + 500 test problems with
+# executable tests). Loaded from the HF cache via load_dataset_smart.
 # ---------------------------------------------------------------------------
-export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-/data2/group_何向南/kang/13641-harrier/EvoChampion/data/code_smoke}"
+export BENCHMARK_DATASET_ID="${BENCHMARK_DATASET_ID:-mbpp}"
+export BENCHMARK_SUBSET=full
 export BENCHMARK_SPLIT=train
 export BENCHMARK_EVAL_SPLIT=test
-export BENCHMARK_QUESTION_KEY=question
-export BENCHMARK_ANSWER_KEY=answer
+export BENCHMARK_QUESTION_KEY=text
+export BENCHMARK_ANSWER_KEY=code
 export BENCHMARK_FORMAT=generic
-# Local directory has no HF "config" name; empty subset avoids a failing
-# name="main" first attempt in the bidirectional retry.
-export BENCHMARK_SUBSET="${BENCHMARK_SUBSET:-}"
 
 # ---------------------------------------------------------------------------
 # Training: LoRA for small data (anti-forgetting, memory-friendly)
