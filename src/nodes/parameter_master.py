@@ -16,6 +16,7 @@ from config.settings import (
     MCTS_MUTATION_SCALE_MAX,
     MCTS_MUTATION_SCALE_MIN,
     MCTS_TUNER_COLD_START_EDGES,
+    TRAIN_FINETUNING_TYPE,
     get_session_dir,
 )
 from src.tools.agent_prompts import (
@@ -638,6 +639,11 @@ def parameter_master_node(state: EvoState) -> dict:
         or training_hyperparams.get("finetuning_type")
         or "full"
     ).lower()
+    # Configured finetuning type (from run_code.sh) overrides the template.
+    # This ensures the parameter_master uses LoRA when TRAIN_FINETUNING_TYPE=lora,
+    # so LoRA-appropriate hyperparams (lr, epochs, grad_accum) are selected.
+    if TRAIN_FINETUNING_TYPE:
+        template_finetuning = TRAIN_FINETUNING_TYPE.lower()
     if template_finetuning == "lora":
         training_hyperparams["finetuning_type"] = "lora"
         template_defaults["finetuning_type"] = "lora"
