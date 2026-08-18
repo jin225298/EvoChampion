@@ -175,6 +175,12 @@ def trainer_node(state: EvoState) -> dict:
         or action_metadata.get("finetuning_type")
         or TRAIN_FINETUNING_TYPE
     )
+    # When LoRA is configured (e.g. code-domain smoke run: small data, prevent
+    # forgetting, keep candidate checkpoints tiny), force it so the LLM cannot
+    # override to "full" — a full finetune writes multi-GB checkpoints that
+    # exhaust the /data2 quota.
+    if TRAIN_FINETUNING_TYPE == "lora":
+        finetuning_type = "lora"
     lora_rank = int(
         training_hyperparams.pop("lora_rank", None)
         or action_metadata.get("lora_rank")
