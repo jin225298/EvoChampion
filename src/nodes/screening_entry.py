@@ -22,8 +22,13 @@ from config.settings import (
     MAX_PROFILE_WINDOWS_PER_ROUND,
     SCREENING_ENTRY_MAX_QUESTIONS,
     get_classifier_labels,
+    IS_CODE_DOMAIN,
+    BENCHMARK_QUESTION_KEY,
+    BENCHMARK_ANSWER_KEY,
+    BENCHMARK_TEST_KEY,
+    BENCHMARK_ENTRY_POINT_KEY,
 )
-from src.tools.dataset_adapter import load_hf_dataset_with_fallback
+from src.tools.dataset_adapter import load_hf_dataset_with_fallback, normalize_item
 from src.tools.dataset_bank import infer_module
 from src.tools.dataset_cleaner_codegen import apply_cleaner_to_rows
 from src.tools.dataset_state import DATASET_STATE_IN_USE
@@ -120,6 +125,58 @@ def _load_dataset_from_ref(ref: dict, schema_override: dict | None = None, state
     subset = ref.get("subset")
     split = ref.get("split") or "train"
     offset, limit = _window_bounds_from_ref(ref, state)
+
+    # Code domain: local datasets (e.g. code_smoke) are already clean and carry
+    # their own test/entry_point. Bypass the cleaner pipeline entirely and
+    # standardize rows directly via normalize_item (which sets evaluation_method
+    # = code_exec and extracts test/entry_point for code domain).
+    if IS_CODE_DOMAIN:
+        t_start = time.time()
+        try:
+            dataset = load_hf_dataset_with_fallback(dataset_id, subset, split, streaming=False)
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            print(f"[screening_entry] Failed to load {dataset_id}: {error}")
+            metadata = _window_metadata(ref, offset, limit, 0)
+            metadata["load_error"] = error
+            metadata["failure_reason"] = error
+            return [], metadata
+        schema = {
+            "question_field": BENCHMARK_QUESTION_KEY,
+            "answer_field": BENCHMARK_ANSWER_KEY,
+            "rollout_gold_field": BENCHMARK_ANSWER_KEY,
+            "train_output_field": BENCHMARK_ANSWER_KEY,
+            "dedup_key_field": BENCHMARK_QUESTION_KEY,
+            "target_style": "answer",
+        }
+        questions: list[dict] = []
+        for idx, row in enumerate(dataset):
+            if idx < offset:
+                continue
+            if limit > 0 and len(questions) >= limit:
+                break
+            item = dict(row) if not isinstance(row, dict) else row
+            normalized = normalize_item(item, schema, idx, dataset_id, source_dataset_split=split)
+            if normalized is None:
+                continue
+            normalized["added_round"] = int((state or {}).get("round_id", 0) or 0)
+            normalized["module"] = infer_module(normalized.get("question_text", ""))
+            questions.append(normalized)
+        elapsed = time.time() - t_start
+        print(
+            f"[screening_entry] Loaded {len(questions)} questions from {dataset_id} "
+            f"(code domain, no cleaner) in {elapsed:.2f}s"
+        )
+        metadata = _window_metadata(ref, offset, limit, len(questions))
+        metadata["cleaner_required"] = False
+        metadata["cleaner_status"] = "passthrough_code"
+        metadata["cleaner_source"] = "code_domain_passthrough"
+        for q in questions:
+            q["dataset_window_id"] = metadata.get("window_id")
+            q["dataset_window_offset"] = offset
+            q["dataset_window_limit"] = limit
+        return questions, metadata
+
     cleaner_cache_ref, cleaner_source = _cleaner_cache_ref_from_ref(ref)
     if not cleaner_cache_ref:
         return [], _cleaner_failure_metadata(
