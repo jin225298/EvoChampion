@@ -76,13 +76,15 @@ else
   log "environment file not found at $ENV_FILE; using script defaults"
 fi
 
-# Cluster-reachable proxy for Hugging Face / dataset access. Uses http_proxy /
-# https_proxy from the environment or .env when set; otherwise leaves them unset
-# (set http_proxy/https_proxy in .env if the node needs a proxy for HF).
-export http_proxy="${http_proxy:-}"
-export https_proxy="${https_proxy:-}"
+# Cluster-reachable proxy for Hugging Face / dataset access. Compute nodes
+# cannot use the login node's 127.0.0.1:1081 proxy, so force the cluster
+# proxy here. Override with CODE_HTTP_PROXY / CODE_HTTPS_PROXY if needed.
+export http_proxy="${CODE_HTTP_PROXY:-http://11.11.11.100:1081}"
+export https_proxy="${CODE_HTTPS_PROXY:-http://11.11.11.100:1081}"
 export HTTP_PROXY="$http_proxy"
 export HTTPS_PROXY="$https_proxy"
+export no_proxy="localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+export NO_PROXY="$no_proxy"
 export PYTHONUNBUFFERED=1
 
 if [[ -f "$CONDA_SH" ]]; then
