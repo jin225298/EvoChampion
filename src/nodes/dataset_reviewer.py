@@ -2104,7 +2104,12 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
         )
 
     verdict_value = decision.get("verdict", "reject")
-    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref):
+    # Local dataset directories (code-domain smoke data) already carry
+    # question/answer/test/entry_point in the right shape; the codegen cleaner
+    # assumes math rows and would drop the test fields, so bypass it and keep
+    # the LLM verdict for local datasets.
+    is_local_dataset = isinstance(ref.dataset_id, str) and os.path.isdir(ref.dataset_id)
+    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref) and not is_local_dataset:
         provider = build_cleaner_provider()
         if provider is not None and raw_rows:
             cleaner_result = ensure_cleaner_for_ref(

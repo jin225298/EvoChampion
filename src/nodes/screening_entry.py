@@ -1,3 +1,4 @@
+import os
 import time
 from collections import Counter
 
@@ -23,7 +24,7 @@ from config.settings import (
     SCREENING_ENTRY_MAX_QUESTIONS,
     get_classifier_labels,
 )
-from src.tools.dataset_adapter import load_hf_dataset_with_fallback
+from src.tools.dataset_adapter import load_hf_dataset_with_fallback, normalize_item
 from src.tools.dataset_bank import infer_module
 from src.tools.dataset_cleaner_codegen import apply_cleaner_to_rows
 from src.tools.dataset_state import DATASET_STATE_IN_USE
@@ -114,12 +115,100 @@ def _cleaner_failure_metadata(
     return metadata
 
 
+def _load_local_dataset_rows(
+    ref: dict,
+    offset: int,
+    limit: int,
+    state: EvoState | dict | None,
+) -> tuple[list[dict], dict]:
+    """Load a LOCAL dataset directory (code-domain smoke data) without a cleaner.
+
+    Local datasets ship question/answer/test/entry_point already in the right
+    shape, so the codegen cleaner (which assumes math rows and drops the test
+    fields) is bypassed. Rows are normalized directly and test/entry_point are
+    preserved so the test-execution judge can drive candidates.
+    """
+    dataset_id = ref.get("dataset_id", "unknown")
+    subset = ref.get("subset")
+    split = ref.get("split") or "train"
+    requested_split = ref.get("requested_split") or ref.get("source_dataset_requested_split")
+    schema = {
+        "usable": True,
+        "question_field": "question",
+        "answer_field": "answer",
+        "rollout_gold_field": "answer",
+        "train_output_field": "answer",
+        "target_style": "answer",
+        "dedup_key_field": "question",
+        "schema_type": "flat",
+    }
+    columns = ["question", "answer", "test", "entry_point"]
+    try:
+        dataset = load_hf_dataset_with_fallback(dataset_id, subset, split)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        print(f"[screening_entry] Failed to load local dataset {dataset_id}: {error}")
+        metadata = _window_metadata(ref, offset, limit, 0)
+        metadata["load_error"] = error
+        metadata["failure_reason"] = error
+        return [], metadata
+
+    rows = list(dataset)
+    window = rows[offset:offset + limit] if limit else rows[offset:]
+    questions: list[dict] = []
+    round_id = int((state or {}).get("round_id", 0) or 0)
+    for i, row in enumerate(window):
+        idx = offset + i
+        norm = normalize_item(
+            row,
+            schema,
+            idx,
+            dataset_id,
+            source_dataset_split=str(split) if split is not None else None,
+            source_dataset_subset=str(subset) if subset is not None else None,
+            source_dataset_requested_split=str(requested_split) if requested_split is not None else None,
+            source_dataset_split_names=[str(split)] if split else [],
+            source_dataset_columns=columns,
+            source_dataset_first_row=rows[0] if rows else {},
+            source_dataset_schema=schema,
+        )
+        if norm is None:
+            continue
+        test_code = str(row.get("test") or row.get("tests") or row.get("test_code") or "").strip()
+        entry_point = str(row.get("entry_point") or row.get("function_name") or "").strip()
+        norm["test"] = test_code
+        norm["entry_point"] = entry_point
+        norm["evaluation_method"] = "code_execution"
+        norm["needs_judge"] = False
+        norm["added_round"] = round_id
+        norm["module"] = "code"
+        norm["dataset_window_id"] = ref.get("dataset_window_id")
+        norm["dataset_window_offset"] = offset
+        norm["dataset_window_limit"] = limit
+        questions.append(norm)
+
+    metadata = _window_metadata(ref, offset, limit, len(questions))
+    metadata["local_dataset"] = True
+    if not questions:
+        metadata["failure_reason"] = "no_questions_loaded"
+    print(
+        f"[screening_entry] Loaded local dataset {offset}:{offset + len(questions)} "
+        f"({len(questions)} questions) from {dataset_id} (bypassed cleaner)"
+    )
+    return questions, metadata
+
+
 def _load_dataset_from_ref(ref: dict, schema_override: dict | None = None, state: EvoState | dict | None = None) -> tuple[list[dict], dict]:
     """Download and clean a single dataset reference with a validated cleaner."""
     dataset_id = ref.get("dataset_id", "unknown")
     subset = ref.get("subset")
     split = ref.get("split") or "train"
     offset, limit = _window_bounds_from_ref(ref, state)
+    # Local dataset directories (code-domain smoke data) bypass the cleaner:
+    # they already carry question/answer/test/entry_point and the cleaner would
+    # drop the test fields.
+    if isinstance(dataset_id, str) and os.path.isdir(dataset_id):
+        return _load_local_dataset_rows(ref, offset, limit, state)
     cleaner_cache_ref, cleaner_source = _cleaner_cache_ref_from_ref(ref)
     if not cleaner_cache_ref:
         return [], _cleaner_failure_metadata(

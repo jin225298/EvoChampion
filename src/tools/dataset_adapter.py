@@ -323,7 +323,15 @@ def load_hf_dataset_with_fallback(
     两次都失败才抛原始异常。
     """
     load_dataset = importlib.import_module("datasets").load_dataset
-    dataset_source = prepare_hfd_dataset_source(dataset_id) if allow_hfd else dataset_id
+    # Local dataset directories (code-domain smoke data shipped in the repo)
+    # cannot be streamed the way hub datasets are; force non-streaming so the
+    # loader reads the local train/test files directly without network access.
+    if os.path.isdir(dataset_id):
+        streaming = False
+        allow_hfd = False
+        dataset_source = dataset_id
+    else:
+        dataset_source = prepare_hfd_dataset_source(dataset_id) if allow_hfd else dataset_id
     load_kwargs: dict[str, Any] = {}
     if dataset_source != dataset_id:
         load_kwargs["cache_dir"] = str(_hfd_dataset_cache_root())
