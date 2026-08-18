@@ -57,13 +57,21 @@ def processed_question_fields(item: Any) -> dict[str, Any]:
     if not evaluation_method:
         evaluation_method = "gold" if rollout_gold_answer or gold_answer else "llm_judge" if train_output else "gold"
     needs_judge = bool(needs_judge or evaluation_method == "llm_judge")
-    return {
+    result = {
         "rollout_gold_answer": rollout_gold_answer,
         "train_output": train_output,
         "target_style": target_style,
         "evaluation_method": evaluation_method,
         "needs_judge": needs_judge,
     }
+    # Preserve code domain fields (test, entry_point) through the data pipeline
+    test_code = text_or_empty(get_question_field(item, "test", ""))
+    if test_code:
+        result["test"] = test_code
+    entry_point = text_or_empty(get_question_field(item, "entry_point", ""))
+    if entry_point:
+        result["entry_point"] = entry_point
+    return result
 
 
 def add_processed_question_fields(target: dict[str, Any], source: Any) -> dict[str, Any]:
