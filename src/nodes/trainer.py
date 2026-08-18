@@ -4,6 +4,7 @@ from pathlib import Path
 
 from config.settings import (
     BASE_MODEL_NAME,
+    DOMAIN,
     LORA_ALPHA,
     LORA_DROPOUT,
     LORA_RANK,
@@ -179,12 +180,19 @@ def trainer_node(state: EvoState) -> dict:
     training_hyperparams = dict(state.get("current_training_hyperparams", {}))
     action_metadata = dict(state.get("current_action_metadata", {}))
 
-    finetuning_type = str(
+    if DOMAIN == "code":
+        # Code domain: force the configured finetuning type (LoRA by default).
+        # The small-data code loop must use LoRA; the LLM hyperparams agent
+        # tends to emit the math default ("full"), which regresses the model.
+        finetuning_type = str(TRAIN_FINETUNING_TYPE or "lora").strip().lower()
         training_hyperparams.pop("finetuning_type", None)
-        or action_metadata.get("finetuning_type")
-        or TRAIN_FINETUNING_TYPE
-        or "full"
-    ).strip().lower()
+    else:
+        finetuning_type = str(
+            training_hyperparams.pop("finetuning_type", None)
+            or action_metadata.get("finetuning_type")
+            or TRAIN_FINETUNING_TYPE
+            or "full"
+        ).strip().lower()
     lora_rank = int(
         training_hyperparams.pop("lora_rank", None)
         or action_metadata.get("lora_rank")
