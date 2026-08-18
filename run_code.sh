@@ -67,8 +67,8 @@ export USE_LLM_AS_JUDGE=0
 export LLM_JUDGE_MAX_ITEMS=0
 export LLM_JUDGE_BATCH_SIZE="${LLM_JUDGE_BATCH_SIZE:-16}"
 
-# Smoke-scale evolution (single round, tiny quotas).
-export MAX_ROUNDS="${MAX_ROUNDS:-1}"
+# Smoke-scale evolution (multiple rounds so accuracy can improve over rounds).
+export MAX_ROUNDS="${MAX_ROUNDS:-3}"
 export FILTER_TARGET_QUESTIONS_PER_ROUND="${FILTER_TARGET_QUESTIONS_PER_ROUND:-8}"
 export ROLLOUT_TIMES="${ROLLOUT_TIMES:-3}"
 export SCREENING_ENTRY_MAX_QUESTIONS="${SCREENING_ENTRY_MAX_QUESTIONS:-8}"
@@ -76,14 +76,17 @@ export DATASET_PROFILE_WINDOW_SIZE="${DATASET_PROFILE_WINDOW_SIZE:-8}"
 export MAX_PROFILE_WINDOWS_PER_ROUND="${MAX_PROFILE_WINDOWS_PER_ROUND:-1}"
 export MAX_PROFILE_ITEMS_PER_ROUND="${MAX_PROFILE_ITEMS_PER_ROUND:-8}"
 export HOLDOUT_EVAL_SIZE="${HOLDOUT_EVAL_SIZE:-8}"
+# Allow small training rounds so the smoke dataset does not trigger budget
+# exhaustion after the first window.
+export DATA_MIN_TRAIN_QUESTIONS_PER_ROUND="${DATA_MIN_TRAIN_QUESTIONS_PER_ROUND:-4}"
 
 # Small eval caps so the smoke loop runs with a handful of questions.
-export EVAL_TEST_MAX_ITEMS="${EVAL_TEST_MAX_ITEMS:-8}"
-export EVAL_COTEST_MAX_ITEMS="${EVAL_COTEST_MAX_ITEMS:-8}"
+export EVAL_TEST_MAX_ITEMS="${EVAL_TEST_MAX_ITEMS:-11}"
+export EVAL_COTEST_MAX_ITEMS="${EVAL_COTEST_MAX_ITEMS:-4}"
 export EVAL_MASTERED_MAX_ITEMS="${EVAL_MASTERED_MAX_ITEMS:-8}"
-export PROBE_EVAL_MAX_ITEMS="${PROBE_EVAL_MAX_ITEMS:-8}"
-export GLOBAL_PROBE_SIZE="${GLOBAL_PROBE_SIZE:-8}"
-export FROZEN_PROBE_SIZE="${FROZEN_PROBE_SIZE:-8}"
+export PROBE_EVAL_MAX_ITEMS="${PROBE_EVAL_MAX_ITEMS:-11}"
+export GLOBAL_PROBE_SIZE="${GLOBAL_PROBE_SIZE:-11}"
+export FROZEN_PROBE_SIZE="${FROZEN_PROBE_SIZE:-11}"
 
 # Data split ratios (small data → bias toward train).
 export TRAIN_SPLIT_RATIO="${TRAIN_SPLIT_RATIO:-0.70}"

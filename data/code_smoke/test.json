@@ -1,50 +1,68 @@
 [
   {
-    "question": "Write a function increment(n) that returns n plus 1.",
-    "answer": "def increment(n):\n    return n + 1",
-    "test": "def check(candidate):\n    assert candidate(4) == 5\n    assert candidate(0) == 1\n    assert candidate(-1) == 0",
-    "entry_point": "increment"
+    "question": "Write a function contains(lst, val) that returns True if val is in lst.",
+    "answer": "def contains(lst, val):\n    return val in lst",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3], 2) == True\n    assert candidate([1, 2, 3], 5) == False\n    assert candidate([], 1) == False",
+    "entry_point": "contains"
   },
   {
-    "question": "Write a function is_odd(n) that returns True if n is odd, else False.",
-    "answer": "def is_odd(n):\n    return n % 2 == 1",
-    "test": "def check(candidate):\n    assert candidate(3) is True\n    assert candidate(4) is False\n    assert candidate(0) is False",
-    "entry_point": "is_odd"
+    "question": "Write a function first_element(lst) that returns the first element of lst.",
+    "answer": "def first_element(lst):\n    return lst[0] if lst else None",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 1\n    assert candidate(['a']) == 'a'\n    assert candidate([]) == None",
+    "entry_point": "first_element"
   },
   {
-    "question": "Write a function is_negative(n) that returns True if n is negative, else False.",
-    "answer": "def is_negative(n):\n    return n < 0",
-    "test": "def check(candidate):\n    assert candidate(-3) is True\n    assert candidate(5) is False\n    assert candidate(0) is False",
-    "entry_point": "is_negative"
+    "question": "Write a function last_element(lst) that returns the last element of lst.",
+    "answer": "def last_element(lst):\n    return lst[-1] if lst else None",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 3\n    assert candidate(['a']) == 'a'\n    assert candidate([]) == None",
+    "entry_point": "last_element"
   },
   {
-    "question": "Write a function cube(n) that returns n cubed.",
-    "answer": "def cube(n):\n    return n * n * n",
-    "test": "def check(candidate):\n    assert candidate(2) == 8\n    assert candidate(0) == 0\n    assert candidate(-3) == -27",
-    "entry_point": "cube"
+    "question": "Write a function factorial(n) that returns n! for a non-negative integer n.",
+    "answer": "def factorial(n):\n    result = 1\n    for i in range(2, n + 1):\n        result *= i\n    return result",
+    "test": "def check(candidate):\n    assert candidate(0) == 1\n    assert candidate(1) == 1\n    assert candidate(5) == 120",
+    "entry_point": "factorial"
   },
   {
-    "question": "Write a function triple(n) that returns three times n.",
-    "answer": "def triple(n):\n    return n * 3",
-    "test": "def check(candidate):\n    assert candidate(4) == 12\n    assert candidate(0) == 0\n    assert candidate(-2) == -6",
-    "entry_point": "triple"
+    "question": "Write a function gcd(a, b) that returns the greatest common divisor of a and b.",
+    "answer": "def gcd(a, b):\n    a, b = abs(a), abs(b)\n    while b:\n        a, b = b, a % b\n    return a",
+    "test": "def check(candidate):\n    assert candidate(12, 8) == 4\n    assert candidate(7, 5) == 1\n    assert candidate(100, 10) == 10",
+    "entry_point": "gcd"
   },
   {
-    "question": "Write a function to_upper(s) that returns the uppercase version of string s.",
-    "answer": "def to_upper(s):\n    return s.upper()",
-    "test": "def check(candidate):\n    assert candidate('abc') == 'ABC'\n    assert candidate('') == ''\n    assert candidate('Ab1') == 'AB1'",
-    "entry_point": "to_upper"
+    "question": "Write a function digit_sum(n) that returns the sum of the digits of a non-negative integer n.",
+    "answer": "def digit_sum(n):\n    return sum(int(d) for d in str(n))",
+    "test": "def check(candidate):\n    assert candidate(123) == 6\n    assert candidate(0) == 0\n    assert candidate(99) == 18",
+    "entry_point": "digit_sum"
   },
   {
-    "question": "Write a function list_length(lst) that returns the number of elements in lst.",
-    "answer": "def list_length(lst):\n    return len(lst)",
-    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 3\n    assert candidate([]) == 0\n    assert candidate(['a']) == 1",
-    "entry_point": "list_length"
+    "question": "Write a function range_sum(start, end) that returns the sum of integers from start to end inclusive.",
+    "answer": "def range_sum(start, end):\n    return sum(range(start, end + 1))",
+    "test": "def check(candidate):\n    assert candidate(1, 5) == 15\n    assert candidate(3, 3) == 3\n    assert candidate(0, 0) == 0",
+    "entry_point": "range_sum"
   },
   {
-    "question": "Write a function multiply_three(a, b, c) that returns the product of a, b, and c.",
-    "answer": "def multiply_three(a, b, c):\n    return a * b * c",
-    "test": "def check(candidate):\n    assert candidate(2, 3, 4) == 24\n    assert candidate(0, 5, 9) == 0\n    assert candidate(-1, 2, 3) == -6",
-    "entry_point": "multiply_three"
+    "question": "Write a function clamp(value, low, high) that returns value clamped to [low, high].",
+    "answer": "def clamp(value, low, high):\n    return max(low, min(value, high))",
+    "test": "def check(candidate):\n    assert candidate(5, 0, 10) == 5\n    assert candidate(-3, 0, 10) == 0\n    assert candidate(15, 0, 10) == 10",
+    "entry_point": "clamp"
+  },
+  {
+    "question": "Write a function sign(n) that returns -1 if n<0, 1 if n>0, else 0.",
+    "answer": "def sign(n):\n    return -1 if n < 0 else (1 if n > 0 else 0)",
+    "test": "def check(candidate):\n    assert candidate(-5) == -1\n    assert candidate(5) == 1\n    assert candidate(0) == 0",
+    "entry_point": "sign"
+  },
+  {
+    "question": "Write a function xor(a, b) that returns the logical XOR of booleans a and b.",
+    "answer": "def xor(a, b):\n    return a != b",
+    "test": "def check(candidate):\n    assert candidate(True, False) == True\n    assert candidate(True, True) == False\n    assert candidate(False, False) == False",
+    "entry_point": "xor"
+  },
+  {
+    "question": "Write a function bool_to_int(b) that returns 1 if b is True, else 0.",
+    "answer": "def bool_to_int(b):\n    return 1 if b else 0",
+    "test": "def check(candidate):\n    assert candidate(True) == 1\n    assert candidate(False) == 0",
+    "entry_point": "bool_to_int"
   }
 ]

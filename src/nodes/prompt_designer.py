@@ -240,17 +240,23 @@ def _apply_leaf_design_decisions(state: EvoState, fallback: dict, round_id: int)
         successes.append("classifier_label_notes")
 
     # ── leaf ⑧: 指令前缀（基于领域目标动态生成） ──
-    raw_prefix, ok = decide_json_leaf(
-        agent_name="instruction_designer",
-        prompt=get_agent_prompt("instruction_designer", INSTRUCTION_DESIGNER_PROMPT),
-        context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "instruction_prefix"},
-        field_name="instruction_prefix",
-        fallback_value=fallback["instruction_prefix"],
-        trace_id=trace_id, round_id=round_id,
-    )
-    instruction_prefix = str(raw_prefix or fallback["instruction_prefix"]).strip()[:40]
-    if ok and instruction_prefix != fallback["instruction_prefix"]:
-        successes.append("instruction_prefix")
+    if DOMAIN == "code":
+        # Code domain: use the deterministic code instruction prefix. The small
+        # base model tends to emit the math default ("请解答下面的题目。") which
+        # would bias rollouts toward boxed numeric answers instead of code.
+        instruction_prefix = fallback["instruction_prefix"]
+    else:
+        raw_prefix, ok = decide_json_leaf(
+            agent_name="instruction_designer",
+            prompt=get_agent_prompt("instruction_designer", INSTRUCTION_DESIGNER_PROMPT),
+            context={"user_goal": goal, "domain_goal": domain_goal, "field_name": "instruction_prefix"},
+            field_name="instruction_prefix",
+            fallback_value=fallback["instruction_prefix"],
+            trace_id=trace_id, round_id=round_id,
+        )
+        instruction_prefix = str(raw_prefix or fallback["instruction_prefix"]).strip()[:40]
+        if ok and instruction_prefix != fallback["instruction_prefix"]:
+            successes.append("instruction_prefix")
     result["instruction_prefix"] = instruction_prefix
 
     return result, successes

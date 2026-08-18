@@ -2,7 +2,16 @@ import time
 import json
 from pathlib import Path
 
-from config.settings import BASE_MODEL_NAME, TRAINING_CONFIG_TEMPLATE, get_session_dir
+from config.settings import (
+    BASE_MODEL_NAME,
+    LORA_ALPHA,
+    LORA_DROPOUT,
+    LORA_RANK,
+    LORA_TARGET_MODULES,
+    TRAINING_CONFIG_TEMPLATE,
+    TRAIN_FINETUNING_TYPE,
+    get_session_dir,
+)
 from src.models.messages import (
     AgentName,
     DatasetBundlePayload,
@@ -173,18 +182,37 @@ def trainer_node(state: EvoState) -> dict:
     finetuning_type = str(
         training_hyperparams.pop("finetuning_type", None)
         or action_metadata.get("finetuning_type")
+        or TRAIN_FINETUNING_TYPE
         or "full"
-    )
+    ).strip().lower()
     lora_rank = int(
         training_hyperparams.pop("lora_rank", None)
         or action_metadata.get("lora_rank")
+        or LORA_RANK
         or 0
     )
     lora_alpha = int(
         training_hyperparams.pop("lora_alpha", None)
         or action_metadata.get("lora_alpha")
+        or LORA_ALPHA
         or 0
     )
+    # LoRA needs a higher LR than full finetune. If the agent supplied a
+    # full-finetune-scale LR (<= 2e-5) for a LoRA run, bump it to a LoRA-
+    # appropriate default so small-data LoRA actually learns.
+    if finetuning_type == "lora":
+        try:
+            agent_lr = float(training_hyperparams.get("learning_rate") or 0.0)
+        except (TypeError, ValueError):
+            agent_lr = 0.0
+        if agent_lr <= 2e-5:
+            training_hyperparams["learning_rate"] = 1e-4
+        if lora_rank <= 0:
+            lora_rank = LORA_RANK or 8
+        if lora_alpha <= 0:
+            lora_alpha = LORA_ALPHA or 16
+        training_hyperparams.setdefault("lora_target", LORA_TARGET_MODULES or "q_proj,v_proj")
+        training_hyperparams.setdefault("lora_dropout", LORA_DROPOUT if LORA_DROPOUT is not None else 0.05)
     packing = training_hyperparams.pop("packing", None)
     if packing is None:
         packing = action_metadata.get("packing")
