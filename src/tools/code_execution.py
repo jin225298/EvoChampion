@@ -567,7 +567,8 @@ def judge_predictions_code_batch(
             print(f"[code_judge_debug] idx={idx} ep={entry_point!r} "
                   f"cp_len={len(completion_prompt)} pred_len={len(pred)} "
                   f"test_len={len(test_code or '')} passed={result.passed} "
-                  f"err={result.error_type} pred_head={pred[:60]!r}", flush=True)
+                  f"err={result.error_type} cand_head={candidate_code[:120]!r} "
+                  f"stderr_tail={result.stderr[-150:]!r}", flush=True)
         return idx, result
 
     if workers == 1:
