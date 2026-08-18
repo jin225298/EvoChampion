@@ -2067,30 +2067,38 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
     # benchmark) with a passthrough cleaner. This makes the code-domain loop
     # train on local data without relying on the LLM reviewer or a DeepSeek /
     # local cleaner provider, both of which are off by default.
-    if DOMAIN == "code" and is_local_code_dataset(str(ref.dataset_id), samples):
-        try:
-            safe_id = str(ref.dataset_id).replace("/", "_").replace("\\", "_")
-            cleaner_cache_dir = get_session_dir(state.get("trace_id", "")) / "cleaners" / safe_id
-            cleaner_ref = build_passthrough_code_cleaner_ref(cleaner_cache_dir, dataset_id=str(ref.dataset_id))
-            resolved_ref = dict(resolved_ref)
-            resolved_ref["cleaner_cache_ref"] = dict(cleaner_ref)
-            schema = dict(resolved_ref.get("source_dataset_schema") or {})
-            schema["cleaner_cache_ref"] = dict(cleaner_ref)
-            resolved_ref["source_dataset_schema"] = schema
-            verdict = {
-                "dataset_id": resolved_dataset_ref.dataset_id,
-                "verdict": "accept",
-                "reason": "local code dataset with executable tests; passthrough cleaner",
-                "suitability_score": 1.0,
-                "sample_count": len(samples),
-            }
-            print(
-                f"[dataset_reviewer] {ref.dataset_id}: "
-                f"verdict=accept (local code dataset, passthrough cleaner) samples={len(samples)}"
-            )
-            return _decorate_verdict(verdict, requested_ref, resolved_ref)
-        except Exception as exc:
-            print(f"[dataset_reviewer] {ref.dataset_id}: passthrough cleaner failed: {type(exc).__name__}: {exc}")
+    # Review samples nest the full raw row under source_dataset_first_row, so
+    # check that (not the lightweight preview) for test + entry_point.
+    if DOMAIN == "code":
+        _first_row = resolved_ref.get("source_dataset_first_row") or {}
+        if (
+            Path(str(ref.dataset_id)).expanduser().exists()
+            and _first_row.get("test")
+            and _first_row.get("entry_point")
+        ):
+            try:
+                safe_id = str(ref.dataset_id).replace("/", "_").replace("\\", "_")
+                cleaner_cache_dir = get_session_dir(state.get("trace_id", "")) / "cleaners" / safe_id
+                cleaner_ref = build_passthrough_code_cleaner_ref(cleaner_cache_dir, dataset_id=str(ref.dataset_id))
+                resolved_ref = dict(resolved_ref)
+                resolved_ref["cleaner_cache_ref"] = dict(cleaner_ref)
+                schema = dict(resolved_ref.get("source_dataset_schema") or {})
+                schema["cleaner_cache_ref"] = dict(cleaner_ref)
+                resolved_ref["source_dataset_schema"] = schema
+                verdict = {
+                    "dataset_id": resolved_dataset_ref.dataset_id,
+                    "verdict": "accept",
+                    "reason": "local code dataset with executable tests; passthrough cleaner",
+                    "suitability_score": 1.0,
+                    "sample_count": len(samples),
+                }
+                print(
+                    f"[dataset_reviewer] {ref.dataset_id}: "
+                    f"verdict=accept (local code dataset, passthrough cleaner) samples={len(samples)}"
+                )
+                return _decorate_verdict(verdict, requested_ref, resolved_ref)
+            except Exception as exc:
+                print(f"[dataset_reviewer] {ref.dataset_id}: passthrough cleaner failed: {type(exc).__name__}: {exc}")
 
     card_summary = load_dataset_card_summary(
         ref.dataset_id,
