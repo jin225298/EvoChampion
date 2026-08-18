@@ -78,8 +78,11 @@ export HF_HUB_DOWNLOAD_TIMEOUT=180
 export REQUESTS_CONNECT_TIMEOUT=30
 export REQUESTS_READ_TIMEOUT=180
 
-# Code smoke dataset is local; no remote dataset search needed.
-export USE_HFD_DATASET_DOWNLOAD="${USE_HFD_DATASET_DOWNLOAD:-0}"
+# Code smoke dataset is local; the search short-circuits to it (DOMAIN=code).
+# USE_HFD=1 routes the reviewer through load_hf_dataset_with_fallback, which
+# loads the local {split}.json via _load_local_json_split (no hfd download for
+# local paths — that path is tried first).
+export USE_HFD_DATASET_DOWNLOAD="${USE_HFD_DATASET_DOWNLOAD:-1}"
 export SEARCH_FALLBACK_MODE=empty
 export SEARCH_DATASET_REPO_LIMIT=8
 

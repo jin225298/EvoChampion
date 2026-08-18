@@ -15,6 +15,36 @@ from config.settings import DATASET_SHARD_COUNT, DATASET_SHARD_SIZE, SEARCH_DATA
 from src.tools.search_query import is_difficulty_only_search_query
 
 
+def _local_code_benchmark_ref() -> dict | None:
+    """Return a ref for the local code benchmark when DOMAIN=code.
+
+    For the code-domain smoke run the training data is the local
+    ``BENCHMARK_DATASET_ID`` directory (e.g. data/code_smoke). Routing it
+    through search→review→screening lets it be standardized, rollout-judged by
+    execution, and trained on, exactly like a searched HF dataset — without
+    depending on HF search returning a code-with-tests dataset.
+    """
+    import os
+    from pathlib import Path
+
+    if os.getenv("DOMAIN", "").strip().lower() != "code":
+        return None
+    bench = os.getenv("BENCHMARK_DATASET_ID", "").strip()
+    if not bench:
+        return None
+    # Only short-circuit for a real local path; HF repo ids fall through.
+    if not Path(bench).expanduser().exists():
+        return None
+    split = os.getenv("BENCHMARK_SPLIT", "train").strip() or "train"
+    return {
+        "dataset_id": bench,
+        "source": "local",
+        "subset": None,
+        "split": split,
+        "requested_split": split,
+    }
+
+
 class _DatasetInfoLike(Protocol):
     id: str
 
@@ -120,6 +150,14 @@ def search_hf_datasets(
 
     返回 list[dict]，每个 dict 包含 dataset_id / source / subset / split。
     """
+    # Code-domain smoke run: use the local benchmark directory as the training
+    # data source directly, bypassing HF search (which rarely returns a
+    # code-with-tests dataset and tends to surface unrelated repos).
+    local_ref = _local_code_benchmark_ref()
+    if local_ref is not None:
+        print(f"[hf_search] Code domain: using local benchmark as training data: {local_ref['dataset_id']}")
+        return [local_ref]
+
     limit = dataset_repo_limit or SEARCH_DATASET_REPO_LIMIT
 
     if is_difficulty_only_search_query(query):
