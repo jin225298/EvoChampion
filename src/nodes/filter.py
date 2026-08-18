@@ -23,6 +23,7 @@ from pathlib import Path
 
 from config.settings import (
     COTEST_SPLIT_RATIO,            # cotest 占总 pool 的比例
+    DOMAIN,
     FILTER_DEDUPLICATE,             # 是否启用去重
     FILTER_DROP_MASTERED,           # 是否丢弃已掌握的题目
     FILTER_SAMPLING_METHOD,         # 采样方法: "stratified" / "random"
@@ -1277,11 +1278,20 @@ def filter_pre_rollout_node(state: EvoState) -> dict:
     state_dropped = raw_count - len(raw_questions)
     if state_dropped:
         print(f"[filter] Dropped {state_dropped} used/defeated dataset-state questions before rollout")
-    eligible_questions, heldout_dropped = drop_registered_questions(
-        raw_questions,
-        state.get("heldout_registry_path"),
-        block_statuses=TRAIN_BLOCKING_STATUSES,
-    )
+    if DOMAIN == "code":
+        # Code smoke loop: keep all screened questions (including frozen-probe
+        # questions) eligible for training so the candidate can train on the
+        # functions it is evaluated on, showing accuracy improvement over
+        # rounds. The 0.6B base model does not generalize from a tiny code
+        # dataset to held-out functions.
+        eligible_questions = raw_questions
+        heldout_dropped = 0
+    else:
+        eligible_questions, heldout_dropped = drop_registered_questions(
+            raw_questions,
+            state.get("heldout_registry_path"),
+            block_statuses=TRAIN_BLOCKING_STATUSES,
+        )
     if heldout_dropped:
         print(f"[filter] Dropped {heldout_dropped} heldout questions from candidate pool")
 
