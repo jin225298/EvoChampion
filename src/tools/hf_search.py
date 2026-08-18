@@ -38,7 +38,7 @@ def _local_code_benchmark_ref() -> dict | None:
     split = os.getenv("BENCHMARK_SPLIT", "train").strip() or "train"
     return {
         "dataset_id": bench,
-        "source": "local",
+        "source": "huggingface",
         "subset": None,
         "split": split,
         "requested_split": split,
