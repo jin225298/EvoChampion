@@ -48,6 +48,9 @@ export HF_HUB_ENABLE_HF_TRANSFER=0
 export HF_HUB_OFFLINE=0
 export HF_DATASETS_OFFLINE=0
 export TRANSFORMERS_OFFLINE=0
+# NOTE: the Search section below flips these to offline=1 for the smoke run
+# (model is pre-cached, data is local) so the compute node never hangs on the
+# flaky hub network.
 export PYTHONUNBUFFERED=1
 export HF_HUB_DOWNLOAD_TIMEOUT=180
 export REQUESTS_CONNECT_TIMEOUT=30
@@ -74,10 +77,11 @@ export SEARCH_FALLBACK_MODE=predefined
 CODE_TRAIN_DIR="${CODE_TRAIN_DIR:-/data2/group_何向南/kang/13641-harrier/EvoChampion/data/code_train}"
 export SEARCH_FALLBACK_DATASETS="${CODE_TRAIN_DIR}::train"
 # Offline mode: model + datasets come from the cache / repo; no hub access from
-# the compute node (avoids hanging on flaky DNS/SSL).
-export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
-export HF_DATASETS_OFFLINE="${HF_DATASETS_OFFLINE:-1}"
-export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
+# the compute node (avoids hanging on flaky DNS/SSL). Forced to 1 here so it
+# overrides the HF_HUB_OFFLINE=0 default above.
+export HF_HUB_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
 # Reviewer: fail fast on any hub attempt; local data loads instantly.
 export DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS="${DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS:-60}"
 export DATASET_REVIEW_FIRST_ACCEPT_TIMEOUT_SECONDS="${DATASET_REVIEW_FIRST_ACCEPT_TIMEOUT_SECONDS:-60}"
