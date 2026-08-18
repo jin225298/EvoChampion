@@ -109,7 +109,7 @@ def create_replay_entry(
         rollout_gold_answer=rollout_text,
         train_output=train_output,
         target_style=target,
-        evaluation_method=evaluation_method if evaluation_method in {"gold", "llm_judge"} else "gold",
+        evaluation_method=evaluation_method if evaluation_method in {"gold", "llm_judge", "code_execution"} else "gold",
         needs_judge=bool(needs_judge or evaluation_method == "llm_judge"),
         source_dataset_id=source_dataset_id,
         source_dataset_row_id=source_dataset_row_id,

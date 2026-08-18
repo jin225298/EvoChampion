@@ -758,7 +758,7 @@ def _normalize_cleaned_record(result: dict[str, Any], context: dict[str, Any] | 
         process = process or natural_reference
     requested_method = str(result.get("evaluation_method") or result.get("judge_mode") or "").strip().lower()
     requested_needs_judge = result.get("needs_judge")
-    if requested_method not in {"gold", "llm_judge"}:
+    if requested_method not in {"gold", "llm_judge", "code_execution"}:
         requested_method = ""
     evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else "llm_judge"
     if formal_proof_answer:
@@ -945,7 +945,7 @@ def _standard_question_from_cleaned(
         or gold_answer
     ).strip()
     evaluation_method = str(cleaned.get("evaluation_method") or "").strip()
-    if evaluation_method not in {"gold", "llm_judge"}:
+    if evaluation_method not in {"gold", "llm_judge", "code_execution"}:
         evaluation_method = "gold" if (gold_answer or rollout_gold_answer) else "llm_judge"
     needs_judge = _clean_bool(cleaned.get("needs_judge")) or evaluation_method == "llm_judge"
     schema = dict(source_dataset_schema)
