@@ -105,7 +105,7 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         or item.get("target")
         or ""
     )
-    return {
+    normalized = {
         "question_id": f"{BENCHMARK_DATASET_ID.replace('/', '_')}_{split}_{idx}",
         "question_text": question_text,
         "gold_answer": gold_answer,
@@ -115,6 +115,16 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "source_dataset_id": f"{BENCHMARK_DATASET_ID}/{split}",
         "source_dataset_row_id": str(idx),
     }
+    # Preserve code domain fields (test, entry_point)
+    import os
+    if os.getenv("DOMAIN", "").strip().lower() == "code":
+        test_code = str(item.get("test", item.get("test_code", "")))
+        entry_point = str(item.get("entry_point", item.get("function_name", "")))
+        if test_code:
+            normalized["test"] = test_code
+        if entry_point:
+            normalized["entry_point"] = entry_point
+    return normalized
 
 
 def build_dataset_bank(session_dir: Path, dataset_id: str = None, subset: str = None, split: str = None) -> Path:
