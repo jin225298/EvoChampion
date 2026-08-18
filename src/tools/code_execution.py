@@ -573,11 +573,15 @@ def judge_predictions_code_batch(
             _ch = _hl.sha256(candidate_code.encode("utf-8","replace")).hexdigest()[:12]
             _hh = _hl.sha256(_h.encode("utf-8","replace")).hexdigest()[:12]
             try:
-                _dumpp = f"/tmp/code_judge_{idx}_{_hh}.py"
+                import sys as _sys
+                _dumpp = f"/data2/group_何向南/kang/13645-dendrite/code_judge_debug/harness_{idx}_{_hh}.py"
+                import os as _os2
+                _os2.makedirs(_os2.path.dirname(_dumpp), exist_ok=True)
                 with open(_dumpp, "w") as _df:
                     _df.write(_h)
-            except Exception:
-                _dumpp = "<dump-failed>"
+                _dumpp = f"{_dumpp} exe={_sys.executable}"
+            except Exception as _e:
+                _dumpp = f"<dump-failed:{_e}>"
             print(f"[code_judge_debug] idx={idx} ep={entry_point!r} "
                   f"cp_len={len(completion_prompt)} pred_len={len(pred)} "
                   f"test_len={len(test_code or '')} passed={result.passed} "
