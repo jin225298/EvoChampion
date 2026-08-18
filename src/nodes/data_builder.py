@@ -617,18 +617,27 @@ def to_alpaca_record(
     delimiters: tuple[str, str] | None = None,
 ) -> dict:
     import os
-    instruction_prefix = os.environ.get("INSTRUCTION_PREFIX", "请解答下面的题目,并在最后将最终的数值答案写在 \\boxed{} 中,例如 \\boxed{42}。")
-    instruction = (prompt_template or instruction_prefix).rstrip("\n") or "请解答下面的题目,并在最后将最终的数值答案写在 \\boxed{} 中,例如 \\boxed{42}。"
-    input_text = q["question_text"]
-    if prompt_template:
-        try:
-            rendered = prompt_template.format(**q)
-            if rendered:
-                instruction = rendered
-                if q["question_text"].strip() in rendered.strip():
-                    input_text = ""
-        except (KeyError, ValueError):
-            pass
+    if DOMAIN == "code":
+        # Code domain: use the code instruction prefix (set by prompt_designer)
+        # so SFT training matches the rollout/eval prompt format exactly.
+        instruction = os.environ.get(
+            "INSTRUCTION_PREFIX",
+            "Write a Python function that solves the following problem. Output only the code, no explanation.",
+        ).rstrip("\n")
+        input_text = q["question_text"]
+    else:
+        instruction_prefix = os.environ.get("INSTRUCTION_PREFIX", "请解答下面的题目,并在最后将最终的数值答案写在 \\boxed{} 中,例如 \\boxed{42}。")
+        instruction = (prompt_template or instruction_prefix).rstrip("\n") or "请解答下面的题目,并在最后将最终的数值答案写在 \\boxed{} 中,例如 \\boxed{42}。"
+        input_text = q["question_text"]
+        if prompt_template:
+            try:
+                rendered = prompt_template.format(**q)
+                if rendered:
+                    instruction = rendered
+                    if q["question_text"].strip() in rendered.strip():
+                        input_text = ""
+            except (KeyError, ValueError):
+                pass
     record = {
         "instruction": instruction,
         "input": input_text,

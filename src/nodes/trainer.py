@@ -223,9 +223,12 @@ def trainer_node(state: EvoState) -> dict:
         training_hyperparams.setdefault("lora_dropout", LORA_DROPOUT if LORA_DROPOUT is not None else 0.05)
         # Small code datasets need more epochs to learn the function-writing
         # pattern well enough to generalize to held-out test functions. Force
-        # 5 epochs for code (the hyperparams agent tends to emit the math
+        # 8 epochs for code (the hyperparams agent tends to emit the math
         # default of 3, which is too few for tiny code data).
-        training_hyperparams["num_train_epochs"] = 5
+        training_hyperparams["num_train_epochs"] = 8
+        # Lower gradient accumulation to 1 so each sample is a step (more
+        # gradient updates on the small code dataset -> better memorization).
+        training_hyperparams["gradient_accumulation_steps"] = 1
     packing = training_hyperparams.pop("packing", None)
     if packing is None:
         packing = action_metadata.get("packing")
