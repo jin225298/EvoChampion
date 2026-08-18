@@ -65,6 +65,7 @@ from config.settings import (
     TEST_FORGETTING_TOLERANCE,
     TEST_ROLLOUT_TIMES,
     USE_LLM_AS_JUDGE,
+    IS_CODE_DOMAIN,
     get_session_dir,
 )
 from src.models.messages import (
@@ -751,11 +752,12 @@ def _judgements_from_predictions(
             state=state,
             allow_llm_judge=False,
         )
+        is_code = IS_CODE_DOMAIN
         judgements[idx] = {
             "correct": correct,
             "score": 1.0 if correct else 0.0,
-            "reason": "symbolic answer match",
-            "source": "gold",
+            "reason": "code execution" if is_code else "symbolic answer match",
+            "source": "code_exec" if is_code else "gold",
             "judge_raw_text": "",
             "fallback_used": False,
             "schema_errors": [],
