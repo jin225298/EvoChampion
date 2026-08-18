@@ -1825,6 +1825,28 @@ def _has_ready_cleaner_ref(ref: dict) -> bool:
     return isinstance(cache_ref, dict) and cache_ref.get("status") == "ready"
 
 
+def _is_code_dataset_ref(resolved_ref: dict) -> bool:
+    """Code datasets carry test + entry_point per row and need no LLM cleaner.
+
+    The cleaner machinery exists for datasets whose schema auto-detection fails
+    and that need an LLM-generated ``clean_record`` function. Code-with-tests
+    datasets have an explicit, unambiguous schema (question/answer/test/
+    entry_point), so the cleaner requirement is skipped for them — otherwise an
+    unavailable cleaner provider (DATA_CLEANER_PROVIDER=off) would force-reject
+    an otherwise-accepted code dataset.
+    """
+    import os
+    if os.getenv("DOMAIN", "").strip().lower() != "code":
+        return False
+    if not isinstance(resolved_ref, dict):
+        return False
+    first_row = resolved_ref.get("source_dataset_first_row")
+    if isinstance(first_row, dict) and first_row.get("test") and first_row.get("entry_point"):
+        return True
+    columns = resolved_ref.get("source_dataset_columns") or []
+    return "test" in columns and "entry_point" in columns
+
+
 # ═══════════════════════════════════════════════════════════
 #  主入口：dataset_reviewer_node（LangGraph 节点函数）
 # ═══════════════════════════════════════════════════════════
@@ -2096,7 +2118,7 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
         )
 
     verdict_value = decision.get("verdict", "reject")
-    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref):
+    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref) and not _is_code_dataset_ref(resolved_ref):
         provider = build_cleaner_provider()
         if provider is not None and raw_rows:
             cleaner_result = ensure_cleaner_for_ref(
