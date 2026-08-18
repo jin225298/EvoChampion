@@ -345,6 +345,10 @@ def run_sandboxed(
     stderr = _decode(stderr_b)
     error_type, error_message = _classify_error(returncode, stderr, timed_out)
     passed = (not timed_out) and returncode == 0 and error_type == "none"
+    if os.getenv("CODE_JUDGE_DEBUG", "").strip():
+        print(f"[run_sandboxed_debug] rc={returncode} timed_out={timed_out} "
+              f"err={error_type} stderr_len={len(stderr)} "
+              f"stderr_tail={stderr[-120:]!r}", flush=True)
     return {
         "passed": passed,
         "error_type": error_type,
