@@ -217,7 +217,16 @@ def _normalize_training_safety(hyperparams: dict) -> dict:
         except (TypeError, ValueError):
             lr = 0
         if 0 < lr < 1e-5:
+            print(f"[parameter_master] LoRA lr clamp: {lr} -> 2e-4 (full-finetune rate too low for LoRA)")
             normalized["learning_rate"] = 2e-4
+        # Also ensure enough epochs for small datasets
+        try:
+            epochs = float(normalized.get("num_train_epochs", 0))
+        except (TypeError, ValueError):
+            epochs = 0
+        if 0 < epochs < 5:
+            print(f"[parameter_master] LoRA epoch clamp: {epochs} -> 5 (too few epochs for small data)")
+            normalized["num_train_epochs"] = 5
     return normalized
 
 
@@ -324,6 +333,9 @@ def _decide_training_hyperparams(
     for key in _TRAINING_HYPERPARAM_KEYS:
         if key in decision:
             coerced[key] = decision[key]
+    print(f"[parameter_master] LLM training_hyperparams decision: lr={coerced.get('learning_rate')} "
+          f"epochs={coerced.get('num_train_epochs')} grad_accum={coerced.get('gradient_accumulation_steps')} "
+          f"finetuning={coerced.get('finetuning_type')} (protected={protected_finetuning_type})")
     if not coerced:
         return _normalize_training_safety(training_hyperparams)
     if "finetuning_type" in coerced:
