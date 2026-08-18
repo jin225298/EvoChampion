@@ -34,6 +34,11 @@ def _rollout_prompt(question_text: str) -> str:
 
 
 def _answer_only_rollout_prompt(question_text: str) -> str:
+    # Code domain: the model generates a code completion; the math-style
+    # "output the final answer in \boxed{}" suffix is wrong for code, so the
+    # rollout prompt is just the question (function signature + docstring).
+    if use_code_execution_judging():
+        return question_text
     return f"{question_text}{ROLLOUT_ANSWER_ONLY_SUFFIX}"
 
 

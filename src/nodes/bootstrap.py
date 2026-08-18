@@ -211,6 +211,7 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
     from src.tools.code_execution import extract_code_test_fields
     _test_code, _entry_point, _ = extract_code_test_fields(item)
     _has_code_test = bool(_test_code and _entry_point)
+    _completion_prompt = str(item.get("completion_prompt") or "") if isinstance(item, dict) else ""
     return {
         "question_id": f"{safe_id}_{split}_{idx}",
         "question_text": question_text,
@@ -227,6 +228,7 @@ def _normalize_item(item: dict, idx: int, split: str) -> dict:
         "dynamic_difficulty": str(item.get("level", "")),
         "test": _test_code,
         "entry_point": _entry_point,
+        "completion_prompt": _completion_prompt,
         "evaluation_method": "code_execution" if _has_code_test else "gold",
         "needs_judge": False,
     }

@@ -550,8 +550,16 @@ def judge_predictions_code_batch(
         pred = predictions[idx] if idx < len(predictions) else ""
         item = items[idx] if idx < len(items) else {}
         test_code, entry_point, _gold = extract_code_test_fields(item)
+        # HumanEval-style completion tasks: the model generates the function
+        # body given the signature (question). The executable candidate is
+        # completion_prompt + prediction; without this, the entry_point would
+        # be undefined and the test would always fail.
+        completion_prompt = ""
+        if isinstance(item, dict):
+            completion_prompt = str(item.get("completion_prompt") or "")
+        candidate_code = f"{completion_prompt}{pred}"
         result = judge_code_candidate(
-            pred, test_code, entry_point,
+            candidate_code, test_code, entry_point,
             timeout=timeout, memory_mb=memory_mb,
         )
         return idx, result

@@ -1063,6 +1063,10 @@ def normalize_item(
         _code_extra["test"] = _test_code
     if _entry_point:
         _code_extra["entry_point"] = _entry_point
+    if isinstance(item, dict):
+        _completion_prompt = str(item.get("completion_prompt") or "")
+        if _completion_prompt:
+            _code_extra["completion_prompt"] = _completion_prompt
     if _test_code and _entry_point:
         # Code items with an executable test are judged by execution, not by
         # symbolic answer matching or LLM subjective equivalence.

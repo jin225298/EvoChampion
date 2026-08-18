@@ -737,8 +737,12 @@ def _judge_eval_prediction(
     if method == EVALUATION_METHOD_CODE:
         test_code, entry_point, _gold = extract_code_test_fields(item or {})
         from config.settings import CODE_JUDGE_TIMEOUT_SECONDS, CODE_JUDGE_MEMORY_MB
+        completion_prompt = ""
+        if isinstance(item, dict):
+            completion_prompt = str(item.get("completion_prompt") or "")
+        candidate_code = f"{completion_prompt}{prediction}"
         result = judge_code_candidate(
-            prediction, test_code, entry_point,
+            candidate_code, test_code, entry_point,
             timeout=CODE_JUDGE_TIMEOUT_SECONDS, memory_mb=CODE_JUDGE_MEMORY_MB,
         )
         return bool(result.passed)
