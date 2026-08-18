@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --partition=L40
+#SBATCH --partition=RTX4090
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=04:00:00

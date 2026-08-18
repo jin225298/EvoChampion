@@ -63,7 +63,7 @@ export TRAINING_TIMEOUT_SECONDS=1800
 # Model + artifacts — MUST live under /data2 in this agent's own folder.
 # Folder name = execution folder name (13642-grotto). Never write to /home quota.
 # ============================================================================
-DATA2_BASE="${DATA2_BASE:-/data2/13642-grotto}"
+DATA2_BASE="${DATA2_BASE:-/data2/group_何向南/kang/13642-grotto}"
 export BASE_MODEL_NAME=Qwen/Qwen3-0.6B
 export CHAMPION_MODEL_PATH=Qwen/Qwen3-0.6B
 export AGENT_BASE_MODEL_NAME=Qwen/Qwen3-0.6B
