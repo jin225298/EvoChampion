@@ -4,17 +4,18 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=12:00:00
 #SBATCH --job-name=evochampion-code
-#SBATCH --output=/home/kang/agents-evolve-formal-new/log/code_job_%j.out
-#SBATCH --error=/home/kang/agents-evolve-formal-new/log/code_job_%j.err
+#SBATCH --output=log/code_job_%j.out
+#SBATCH --error=log/code_job_%j.err
 #SBATCH --mem=128G
 
 set -Eeuo pipefail
 
-PROJECT_DIR="/home/kang/agents-evolve-formal-new"
+# ── Auto-detect project directory from script location ──
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${PROJECT_DIR}/.env"
 RUN_SCRIPT="${PROJECT_DIR}/run_code.sh"
-CONDA_SH="/home/kang/miniconda3/etc/profile.d/conda.sh"
-CONDA_ENV="agentevolver"
+CONDA_SH="${CONDA_SH:-/home/kang/miniconda3/etc/profile.d/conda.sh}"
+CONDA_ENV="${CONDA_ENV:-agentevolver}"
 
 usage() {
   cat <<USAGE
@@ -72,12 +73,14 @@ else
   log "environment file not found at $ENV_FILE; using script defaults"
 fi
 
-# Slurm jobs may inherit login-shell proxy variables that are only valid on the
-# login node. Force the cluster-reachable proxy so GPU nodes can access APIs.
-export http_proxy="http://202.38.64.108:1081"
-export https_proxy="http://202.38.64.108:1081"
-export HTTP_PROXY="$http_proxy"
-export HTTPS_PROXY="$https_proxy"
+# Proxy: GPU nodes may not reach the login-node proxy.
+# Only set proxy if explicitly provided via environment.
+if [ -n "${CLUSTER_HTTP_PROXY:-}" ]; then
+  export http_proxy="$CLUSTER_HTTP_PROXY"
+  export https_proxy="$CLUSTER_HTTP_PROXY"
+  export HTTP_PROXY="$CLUSTER_HTTP_PROXY"
+  export HTTPS_PROXY="$CLUSTER_HTTP_PROXY"
+fi
 export PYTHONUNBUFFERED=1
 
 if [[ -f "$CONDA_SH" ]]; then
@@ -103,8 +106,7 @@ log "host: $(hostname)"
 log "python: $(command -v python)"
 log "conda env: ${CONDA_DEFAULT_ENV:-none}"
 log "DOMAIN: ${DOMAIN:-unset}"
-log "http_proxy=${http_proxy:-unset}"
-log "https_proxy=${https_proxy:-unset}"
+log "proxy: ${http_proxy:-unset}"
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
   log "slurm job: $SLURM_JOB_ID"
 else
