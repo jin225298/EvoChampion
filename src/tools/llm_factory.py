@@ -481,6 +481,18 @@ def _load_and_patch_config(
     for key, value in (hyperparameters or {}).items():
         config[key] = value
 
+    # LoRA needs a much higher learning rate than full finetune. The parameter
+    # master may emit a full-finetune rate (e.g. 5e-6); clamp it up for LoRA so
+    # the small model actually learns on the tiny code dataset.
+    if finetuning_type == "lora":
+        from config.settings import LORA_LEARNING_RATE, LORA_NUM_EPOCHS
+        current_lr = config.get("learning_rate", 0)
+        if isinstance(current_lr, (int, float)) and current_lr < 1e-5:
+            config["learning_rate"] = LORA_LEARNING_RATE
+        current_epochs = config.get("num_train_epochs", 0)
+        if isinstance(current_epochs, (int, float)) and current_epochs < LORA_NUM_EPOCHS:
+            config["num_train_epochs"] = LORA_NUM_EPOCHS
+
     if eval_dataset_name:
         config["eval_dataset"] = eval_dataset_name
         config["do_eval"] = True

@@ -26,7 +26,7 @@ import json
 import os
 from pathlib import Path
 
-from config.settings import get_session_dir, get_classifier_labels
+from config.settings import get_session_dir, get_classifier_labels, IS_CODE_DOMAIN
 from src.models.state import EvoState
 from src.tools.agent_prompts import (
     DEFAULT_AGENT_PROMPTS,               # 所有 agent 的默认 prompt 注册表
@@ -327,10 +327,16 @@ def prompt_designer_node(state: EvoState) -> dict:
         print(f"[prompt_designer] Set classifier labels: {labels}")
 
     # ── 设置指令前缀环境变量（动态覆盖静态默认值） ──
+    # Code domain: keep the env's code-specific instruction prefix (from
+    # run_code.sh) — the prompt_designer's short phrase is not a good code
+    # generation instruction. Math domain: override as before.
     instruction_prefix = merged_design.get("instruction_prefix", "").strip()
-    if instruction_prefix:
+    if instruction_prefix and not IS_CODE_DOMAIN:
         os.environ["INSTRUCTION_PREFIX"] = instruction_prefix
         print(f"[prompt_designer] Set instruction prefix: {instruction_prefix}")
+    elif IS_CODE_DOMAIN:
+        print(f"[prompt_designer] Code domain: keeping env instruction prefix: "
+              f"{os.environ.get('INSTRUCTION_PREFIX', '')[:80]}")
 
     return {
         "agent_prompt_pack": pack,

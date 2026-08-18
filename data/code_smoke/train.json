@@ -94,5 +94,89 @@
     "answer": "def double(n):\n    return n * 2",
     "test": "def check(candidate):\n    assert candidate(2) == 4\n    assert candidate(0) == 0\n    assert candidate(-3) == -6",
     "entry_point": "double"
+  },
+  {
+    "question": "Write a function `subtract(a, b)` that returns a minus b.",
+    "answer": "def subtract(a, b):\n    return a - b",
+    "test": "def check(candidate):\n    assert candidate(5, 3) == 2\n    assert candidate(0, 5) == -5",
+    "entry_point": "subtract"
+  },
+  {
+    "question": "Write a function `max_of_list(lst)` that returns the maximum value in the list.",
+    "answer": "def max_of_list(lst):\n    return max(lst)",
+    "test": "def check(candidate):\n    assert candidate([1, 3, 2]) == 3\n    assert candidate([-1, -5, -3]) == -1",
+    "entry_point": "max_of_list"
+  },
+  {
+    "question": "Write a function `reverse_string(s)` that returns the reversed string.",
+    "answer": "def reverse_string(s):\n    return s[::-1]",
+    "test": "def check(candidate):\n    assert candidate('abc') == 'cba'\n    assert candidate('') == ''",
+    "entry_point": "reverse_string"
+  },
+  {
+    "question": "Write a function `count_vowels(s)` that returns the number of vowels (a,e,i,o,u) in s, case-insensitive.",
+    "answer": "def count_vowels(s):\n    return sum(1 for c in s.lower() if c in 'aeiou')",
+    "test": "def check(candidate):\n    assert candidate('hello') == 2\n    assert candidate('AEIOU') == 5\n    assert candidate('xyz') == 0",
+    "entry_point": "count_vowels"
+  },
+  {
+    "question": "Write a function `is_palindrome(s)` that returns True if s reads the same forwards and backwards.",
+    "answer": "def is_palindrome(s):\n    return s == s[::-1]",
+    "test": "def check(candidate):\n    assert candidate('racecar') is True\n    assert candidate('hello') is False\n    assert candidate('') is True",
+    "entry_point": "is_palindrome"
+  },
+  {
+    "question": "Write a function `gcd(a, b)` that returns the greatest common divisor of a and b.",
+    "answer": "def gcd(a, b):\n    while b:\n        a, b = b, a % b\n    return a",
+    "test": "def check(candidate):\n    assert candidate(12, 8) == 4\n    assert candidate(7, 3) == 1\n    assert candidate(100, 10) == 10",
+    "entry_point": "gcd"
+  },
+  {
+    "question": "Write a function `sum_list(lst)` that returns the sum of all elements in the list.",
+    "answer": "def sum_list(lst):\n    total = 0\n    for x in lst:\n        total += x\n    return total",
+    "test": "def check(candidate):\n    assert candidate([1, 2, 3]) == 6\n    assert candidate([]) == 0\n    assert candidate([5]) == 5",
+    "entry_point": "sum_list"
+  },
+  {
+    "question": "Write a function `is_prime(n)` that returns True if n is a prime number, else False. Treat n < 2 as not prime.",
+    "answer": "def is_prime(n):\n    if n < 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True",
+    "test": "def check(candidate):\n    assert candidate(2) is True\n    assert candidate(4) is False\n    assert candidate(1) is False\n    assert candidate(17) is True",
+    "entry_point": "is_prime"
+  },
+  {
+    "question": "Write a function `fibonacci(n)` that returns the n-th Fibonacci number (fib(0)=0, fib(1)=1).",
+    "answer": "def fibonacci(n):\n    if n <= 0:\n        return 0\n    if n == 1:\n        return 1\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b",
+    "test": "def check(candidate):\n    assert candidate(0) == 0\n    assert candidate(1) == 1\n    assert candidate(5) == 5\n    assert candidate(10) == 55",
+    "entry_point": "fibonacci"
+  },
+  {
+    "question": "Write a function `abs_value(n)` that returns the absolute value of n.",
+    "answer": "def abs_value(n):\n    return n if n >= 0 else -n",
+    "test": "def check(candidate):\n    assert candidate(5) == 5\n    assert candidate(-5) == 5\n    assert candidate(0) == 0",
+    "entry_point": "abs_value"
+  },
+  {
+    "question": "Write a function `double(n)` that returns n multiplied by 2.",
+    "answer": "def double(n):\n    return n * 2",
+    "test": "def check(candidate):\n    assert candidate(2) == 4\n    assert candidate(0) == 0\n    assert candidate(-3) == -6",
+    "entry_point": "double"
+  },
+  {
+    "question": "Write a function `min_of_list(lst)` that returns the minimum value in the list.",
+    "answer": "def min_of_list(lst):\n    return min(lst)",
+    "test": "def check(candidate):\n    assert candidate([3, 1, 2]) == 1\n    assert candidate([-1, -5, -3]) == -5",
+    "entry_point": "min_of_list"
+  },
+  {
+    "question": "Write a function `capitalize_first(s)` that returns s with its first character uppercased and the rest unchanged.",
+    "answer": "def capitalize_first(s):\n    if not s:\n        return s\n    return s[0].upper() + s[1:]",
+    "test": "def check(candidate):\n    assert candidate('hello') == 'Hello'\n    assert candidate('') == ''\n    assert candidate('world') == 'World'",
+    "entry_point": "capitalize_first"
+  },
+  {
+    "question": "Write a function `string_length(s)` that returns the number of characters in s.",
+    "answer": "def string_length(s):\n    return len(s)",
+    "test": "def check(candidate):\n    assert candidate('hello') == 5\n    assert candidate('') == 0\n    assert candidate('a') == 1",
+    "entry_point": "string_length"
   }
 ]
