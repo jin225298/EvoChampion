@@ -30,6 +30,7 @@ from config.settings import (
     DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS,
     DATASET_REVIEW_TIMEOUT_KILL_GRACE_SECONDS,
     get_session_dir,
+    IS_CODE_DOMAIN,
 )
 from src.tools.agent_prompts import DATASET_REVIEWER_PROMPT
 from src.tools.dataset_cleaner_codegen import (
@@ -2096,7 +2097,10 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
         )
 
     verdict_value = decision.get("verdict", "reject")
-    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref):
+    # Code domain: local datasets (e.g. code_smoke) are already clean and carry
+    # their own test/entry_point. Skip the cleaner requirement so the LLM's
+    # "accept" verdict is preserved (math domain keeps the cleaner gate).
+    if verdict_value == "accept" and not IS_CODE_DOMAIN and not _has_ready_cleaner_ref(resolved_ref):
         provider = build_cleaner_provider()
         if provider is not None and raw_rows:
             cleaner_result = ensure_cleaner_for_ref(
