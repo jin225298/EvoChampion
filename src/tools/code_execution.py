@@ -411,10 +411,13 @@ def judge_code_candidate(
         )
 
     key = _cache_key(candidate_code, test_code, entry_point, timeout, memory_mb)
-    if use_cache:
+    _cache_enabled = use_cache and os.getenv("CODE_JUDGE_USE_CACHE", "1").strip() not in ("0", "false", "no")
+    if _cache_enabled:
         with _CACHE_LOCK:
             cached = _CACHE.get(key)
         if cached is not None:
+            if os.getenv("CODE_JUDGE_DEBUG", "").strip():
+                print(f"[code_judge_debug] CACHE HIT key={key[:12]} passed={cached.passed} err={cached.error_type}", flush=True)
             return cached
 
     harness = build_harness(candidate_code, test_code, entry_point)
@@ -432,7 +435,7 @@ def judge_code_candidate(
         stdout=out["stdout"],
         stderr=out["stderr"],
     )
-    if use_cache:
+    if _cache_enabled:
         with _CACHE_LOCK:
             if len(_CACHE) >= _CACHE_MAX:
                 # Drop a quarter of the oldest-ish entries to bound memory.
