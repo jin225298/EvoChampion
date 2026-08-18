@@ -567,16 +567,24 @@ def judge_predictions_code_batch(
         )
         import os as _os
         if _os.getenv("CODE_JUDGE_DEBUG", "").strip():
-            # Also call run_sandboxed directly to isolate the discrepancy.
             _h = build_harness(candidate_code, test_code, entry_point)
             _o = run_sandboxed(_h, timeout=timeout, memory_mb=memory_mb)
+            import hashlib as _hl
+            _ch = _hl.sha256(candidate_code.encode("utf-8","replace")).hexdigest()[:12]
+            _hh = _hl.sha256(_h.encode("utf-8","replace")).hexdigest()[:12]
+            try:
+                _dumpp = f"/tmp/code_judge_{idx}_{_hh}.py"
+                with open(_dumpp, "w") as _df:
+                    _df.write(_h)
+            except Exception:
+                _dumpp = "<dump-failed>"
             print(f"[code_judge_debug] idx={idx} ep={entry_point!r} "
                   f"cp_len={len(completion_prompt)} pred_len={len(pred)} "
                   f"test_len={len(test_code or '')} passed={result.passed} "
                   f"err={result.error_type} rc={result.returncode} "
                   f"direct_passed={_o['passed']} direct_rc={_o['returncode']} "
-                  f"direct_err={_o['error_type']} "
-                  f"stderr_tail={result.stderr[-120:]!r}", flush=True)
+                  f"cand_hash={_ch} harness_hash={_hh} dump={_dumpp} "
+                  f"stderr_tail={result.stderr[-100:]!r}", flush=True)
         return idx, result
 
     if workers == 1:
