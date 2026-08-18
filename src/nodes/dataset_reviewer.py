@@ -2097,26 +2097,38 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
 
     verdict_value = decision.get("verdict", "reject")
     if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref):
-        provider = build_cleaner_provider()
-        if provider is not None and raw_rows:
-            cleaner_result = ensure_cleaner_for_ref(
-                _cleaner_request_for_review(ref, state, samples, resolved_ref, card_summary),
-                provider=provider,
-                max_repair_attempts=DATA_CLEANER_MAX_REPAIR_ATTEMPTS,
-            )
-            if getattr(cleaner_result, "status", "") == "ready":
-                resolved_ref = _attach_cleaner_result(resolved_ref, cleaner_result)
+        # Local datasets (paths starting with /) don't need a cleaner - they're
+        # already in the correct format. Create a dummy ready cleaner.
+        if str(ref.dataset_id).startswith("/"):
+            resolved_ref["cleaner_cache_ref"] = {
+                "status": "ready",
+                "cleaner_id": "local_passthrough",
+                "cache_dir": "",
+            }
+            schema = dict(resolved_ref.get("source_dataset_schema") or {})
+            schema["cleaner_cache_ref"] = dict(resolved_ref["cleaner_cache_ref"])
+            resolved_ref["source_dataset_schema"] = schema
+        else:
+            provider = build_cleaner_provider()
+            if provider is not None and raw_rows:
+                cleaner_result = ensure_cleaner_for_ref(
+                    _cleaner_request_for_review(ref, state, samples, resolved_ref, card_summary),
+                    provider=provider,
+                    max_repair_attempts=DATA_CLEANER_MAX_REPAIR_ATTEMPTS,
+                )
+                if getattr(cleaner_result, "status", "") == "ready":
+                    resolved_ref = _attach_cleaner_result(resolved_ref, cleaner_result)
+                else:
+                    verdict_value = "reject"
+                    decision["reason"] = (
+                        "cleaner validation failed: "
+                        + str(getattr(cleaner_result, "failure_reason", "") or "unknown")
+                    )
+                    decision["suitability_score"] = 0.0
             else:
                 verdict_value = "reject"
-                decision["reason"] = (
-                    "cleaner validation failed: "
-                    + str(getattr(cleaner_result, "failure_reason", "") or "unknown")
-                )
+                decision["reason"] = "cleaner provider unavailable for dataset"
                 decision["suitability_score"] = 0.0
-        else:
-            verdict_value = "reject"
-            decision["reason"] = "cleaner provider unavailable for dataset"
-            decision["suitability_score"] = 0.0
 
     return _decorate_verdict({
         "dataset_id": ref.dataset_id,

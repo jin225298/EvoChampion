@@ -120,6 +120,12 @@ def _load_dataset_from_ref(ref: dict, schema_override: dict | None = None, state
     subset = ref.get("subset")
     split = ref.get("split") or "train"
     offset, limit = _window_bounds_from_ref(ref, state)
+
+    # Local datasets (paths starting with /) bypass the cleaner pipeline.
+    # They are already in the correct format and don't need a generated cleaner.
+    if str(dataset_id).startswith("/"):
+        return _load_local_dataset(ref, offset, limit, state)
+
     cleaner_cache_ref, cleaner_source = _cleaner_cache_ref_from_ref(ref)
     if not cleaner_cache_ref:
         return [], _cleaner_failure_metadata(
@@ -222,6 +228,115 @@ def _load_dataset_from_ref(ref: dict, schema_override: dict | None = None, state
     for key in ("cleaned_count", "rejected_count", "processed_count"):
         if isinstance(cleaner_stats, dict) and key in cleaner_stats:
             metadata[key] = cleaner_stats[key]
+    if not questions:
+        metadata["failure_reason"] = "no_questions_loaded"
+    for q in questions:
+        q["dataset_window_id"] = metadata["window_id"]
+        q["dataset_window_offset"] = offset
+        q["dataset_window_limit"] = limit
+    return questions, metadata
+
+
+def _load_local_dataset(ref: dict, offset: int, limit: int, state: EvoState | dict | None = None) -> tuple[list[dict], dict]:
+    """Load a local dataset directory (bypasses the cleaner pipeline).
+
+    Local datasets are already in the correct format (question/answer/test/entry_point).
+    This function loads them directly without requiring a generated cleaner.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    dataset_id = ref.get("dataset_id", "unknown")
+    split = ref.get("split") or "train"
+    t_start = time.time()
+
+    # Load the local JSON file
+    data_path = _Path(str(dataset_id))
+    if data_path.is_dir():
+        # Try train.json or <split>.json
+        json_file = data_path / f"{split}.json"
+        if not json_file.exists():
+            json_file = data_path / "train.json"
+    else:
+        json_file = data_path
+
+    if not json_file.exists():
+        metadata = _window_metadata(ref, offset, limit, 0)
+        metadata["failure_reason"] = f"local dataset file not found: {json_file}"
+        return [], metadata
+
+    try:
+        with open(json_file, "r", encoding="utf-8") as f:
+            raw_data = _json.load(f)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        print(f"[screening_entry] Failed to load local dataset {dataset_id}: {error}")
+        metadata = _window_metadata(ref, offset, limit, 0)
+        metadata["load_error"] = error
+        metadata["failure_reason"] = error
+        return [], metadata
+
+    if not isinstance(raw_data, list):
+        metadata = _window_metadata(ref, offset, limit, 0)
+        metadata["failure_reason"] = "local dataset is not a list"
+        return [], metadata
+
+    # Apply offset and limit
+    sliced = raw_data[offset:offset + limit] if limit else raw_data[offset:]
+
+    # Normalize items to the system format
+    questions: list[dict] = []
+    for idx, item in enumerate(sliced):
+        if not isinstance(item, dict):
+            continue
+        question_text = str(item.get("question", item.get("input", item.get("problem", ""))))
+        gold_answer = str(item.get("answer", item.get("output", item.get("target", ""))))
+        if not question_text or not gold_answer:
+            continue
+
+        normalized = {
+            "question_id": f"local_{split}_{offset + idx}",
+            "question_text": question_text,
+            "gold_answer": gold_answer,
+            "rollout_gold_answer": gold_answer,
+            "train_output": gold_answer,
+            "target_style": "answer",
+            "source_dataset_id": str(dataset_id),
+            "source_dataset_row_id": str(offset + idx),
+            "source_dataset_split": split,
+            "source_dataset_subset": None,
+            "source_dataset_requested_split": split,
+            "source_dataset_split_names": [split],
+            "source_dataset_columns": list(item.keys()),
+            "source_dataset_first_row": dict(item),
+            "source_dataset_schema": {"question_field": "question", "answer_field": "answer"},
+            "added_round": int((state or {}).get("round_id", 0) or 0),
+            "module": infer_module(question_text),
+        }
+
+        # Code domain: include test and entry_point
+        import os
+        if os.getenv("DOMAIN", "").strip().lower() == "code":
+            test_code = str(item.get("test", item.get("test_code", "")))
+            entry_point = str(item.get("entry_point", item.get("function_name", "")))
+            if test_code:
+                normalized["test"] = test_code
+            if entry_point:
+                normalized["entry_point"] = entry_point
+
+        questions.append(normalized)
+
+    elapsed = time.time() - t_start
+    print(
+        f"[screening_entry] Loaded local dataset {offset}:{offset + len(questions)} "
+        f"({len(questions)} questions) from {dataset_id} "
+        f"in {elapsed:.2f}s"
+    )
+    metadata = _window_metadata(ref, offset, limit, len(questions))
+    metadata["cleaner_required"] = False
+    metadata["cleaner_status"] = "local_passthrough"
+    metadata["cleaner_source"] = "local"
+    metadata["cleaner_stats"] = {"cleaned_count": len(questions), "rejected_count": 0, "processed_count": len(questions)}
     if not questions:
         metadata["failure_reason"] = "no_questions_loaded"
     for q in questions:
