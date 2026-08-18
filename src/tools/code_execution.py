@@ -562,6 +562,12 @@ def judge_predictions_code_batch(
             candidate_code, test_code, entry_point,
             timeout=timeout, memory_mb=memory_mb,
         )
+        import os as _os
+        if _os.getenv("CODE_JUDGE_DEBUG", "").strip():
+            print(f"[code_judge_debug] idx={idx} ep={entry_point!r} "
+                  f"cp_len={len(completion_prompt)} pred_len={len(pred)} "
+                  f"test_len={len(test_code or '')} passed={result.passed} "
+                  f"err={result.error_type} pred_head={pred[:60]!r}", flush=True)
         return idx, result
 
     if workers == 1:
