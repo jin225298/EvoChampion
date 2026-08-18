@@ -209,25 +209,28 @@ def _normalize_training_safety(hyperparams: dict) -> dict:
             batch_size = 1
         normalized["per_device_train_batch_size"] = min(2, max(1, batch_size))
     elif finetuning_type == "lora":
-        # LoRA safety: full-finetune learning rates (1e-6 to 1e-5) are too low
-        # for LoRA to converge. This is a domain-knowledge floor, not an
-        # override — the LLM's decision is preserved when it is in a valid
-        # LoRA range (1e-5 to 1e-3).
+        # LoRA safety floors (domain knowledge, not overrides — the LLM's
+        # decision is preserved when it is in a valid LoRA range):
         try:
             lr = float(normalized.get("learning_rate", 0))
         except (TypeError, ValueError):
             lr = 0
         if 0 < lr < 1e-5:
-            print(f"[parameter_master] LoRA lr clamp: {lr} -> 2e-4 (full-finetune rate too low for LoRA)")
             normalized["learning_rate"] = 2e-4
-        # Also ensure enough epochs for small datasets
         try:
             epochs = float(normalized.get("num_train_epochs", 0))
         except (TypeError, ValueError):
             epochs = 0
         if 0 < epochs < 5:
-            print(f"[parameter_master] LoRA epoch clamp: {epochs} -> 5 (too few epochs for small data)")
             normalized["num_train_epochs"] = 5
+        # LoRA on small datasets: grad_accum=1 so every example is an
+        # optimization step. Full-finetune grad_accum (8+) gives <1 step/epoch.
+        try:
+            grad_accum = int(float(normalized.get("gradient_accumulation_steps", 1)))
+        except (TypeError, ValueError):
+            grad_accum = 1
+        if grad_accum > 1:
+            normalized["gradient_accumulation_steps"] = 1
     return normalized
 
 
