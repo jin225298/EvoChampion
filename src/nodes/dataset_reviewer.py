@@ -29,6 +29,7 @@ from config.settings import (
     DATASET_REVIEW_FAILURES_BEFORE_BACKOFF,
     DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS,
     DATASET_REVIEW_TIMEOUT_KILL_GRACE_SECONDS,
+    IS_CODE_DOMAIN,
     get_session_dir,
 )
 from src.tools.agent_prompts import DATASET_REVIEWER_PROMPT
@@ -40,6 +41,7 @@ from src.tools.dataset_cleaner_codegen import (
 from src.tools.dataset_adapter import (
     detect_schema_from_item,
     get_existing_hfd_dataset_source,
+    load_cached_hf_dataset,
     load_hf_dataset_with_fallback,
 )
 from src.tools.dataset_state import DatasetStateManager
@@ -729,6 +731,12 @@ def _load_hf_dataset(dataset_id: str, subset: str | None, split: str, *, streami
         if normalized_subset is None:
             return load_dataset(dataset_id, split=split)
         return load_dataset(dataset_id, name=normalized_subset, split=split)
+    # Code domain + offline mode: load from cached parquet/jsonl files.
+    if IS_CODE_DOMAIN and os.getenv("HF_HUB_OFFLINE", "").strip().lower() in ("1", "true", "yes"):
+        try:
+            return load_cached_hf_dataset(dataset_id, normalized_subset, split)
+        except Exception:
+            pass  # fall through to normal load
     if os.getenv("USE_HFD_DATASET_DOWNLOAD", "").strip().lower() in ("1", "true", "yes", "on"):
         return load_hf_dataset_with_fallback(
             dataset_id,
@@ -2104,12 +2112,13 @@ def _review_dataset(ref: DatasetRef, state: EvoState) -> dict:
         )
 
     verdict_value = decision.get("verdict", "reject")
-    # Local dataset directories (code-domain smoke data) already carry
-    # question/answer/test/entry_point in the right shape; the codegen cleaner
-    # assumes math rows and would drop the test fields, so bypass it and keep
-    # the LLM verdict for local datasets.
+    # Code-domain datasets (local directories or HF code datasets like HumanEval
+    # / MBPP) already carry question/answer/test/entry_point in the right shape;
+    # the codegen cleaner assumes math rows and would drop the test fields, so
+    # bypass it and keep the LLM verdict for code datasets.
     is_local_dataset = isinstance(ref.dataset_id, str) and os.path.isdir(ref.dataset_id)
-    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref) and not is_local_dataset:
+    skip_cleaner = is_local_dataset or IS_CODE_DOMAIN
+    if verdict_value == "accept" and not _has_ready_cleaner_ref(resolved_ref) and not skip_cleaner:
         provider = build_cleaner_provider()
         if provider is not None and raw_rows:
             cleaner_result = ensure_cleaner_for_ref(

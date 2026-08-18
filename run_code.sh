@@ -65,24 +65,24 @@ if [[ "${http_proxy:-}" == *127.0.0.1* || "${http_proxy:-}" == *localhost* ]]; t
 fi
 
 # ---------------------------------------------------------------------------
-# Search: code datasets that ship executable tests. The cluster's compute
-# nodes have flaky DNS/SSL to hf-mirror.com, so the smoke run uses a LOCAL
-# synthetic code dataset (data/code_train) shipped in the repo. The reviewer
-# loads it non-streaming (no network needed).
+# Search: real code datasets from HuggingFace that ship executable tests
+# (HumanEval, MBPP). These are pre-downloaded to the HF cache on the login
+# node; the compute node loads them from cache via load_cached_hf_dataset.
 # ---------------------------------------------------------------------------
 export USE_HFD_DATASET_DOWNLOAD="${USE_HFD_DATASET_DOWNLOAD:-0}"
 export SEARCH_TIMEOUT_SECONDS=60
 export SEARCH_DATASET_REPO_LIMIT=8
 export SEARCH_FALLBACK_MODE=predefined
-CODE_TRAIN_DIR="${CODE_TRAIN_DIR:-/data2/group_何向南/kang/13641-harrier/EvoChampion/data/code_train}"
-export SEARCH_FALLBACK_DATASETS="${CODE_TRAIN_DIR}::train"
-# Offline mode: model + datasets come from the cache / repo; no hub access from
-# the compute node (avoids hanging on flaky DNS/SSL). Forced to 1 here so it
-# overrides the HF_HUB_OFFLINE=0 default above.
+# Real HF datasets: mbpp (subset=full, split=train) and openai_humaneval
+# (no subset, split=test). Pre-cached on the login node via snapshot_download.
+export SEARCH_FALLBACK_DATASETS="mbpp:full:train,openai_humaneval::test"
+# Offline mode: model + datasets come from the HF cache; no hub access from
+# the compute node (avoids hanging on flaky DNS/SSL). load_cached_hf_dataset
+# reads the cached parquet files directly.
 export HF_HUB_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
-# Reviewer: fail fast on any hub attempt; local data loads instantly.
+# Reviewer: fail fast on any hub attempt; cached data loads instantly.
 export DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS="${DATASET_REVIEW_PER_REF_TIMEOUT_SECONDS:-60}"
 export DATASET_REVIEW_FIRST_ACCEPT_TIMEOUT_SECONDS="${DATASET_REVIEW_FIRST_ACCEPT_TIMEOUT_SECONDS:-60}"
 export DATASET_REVIEW_REPLENISHMENT_WAIT_SECONDS="${DATASET_REVIEW_REPLENISHMENT_WAIT_SECONDS:-30}"

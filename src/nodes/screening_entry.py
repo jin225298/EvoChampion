@@ -19,12 +19,13 @@ from src.models.state import EvoState
 from config.settings import (
     DATA_WINDOW_SIZE,
     DATA_WINDOW_RETRY_LIMIT,
+    IS_CODE_DOMAIN,
     MAX_PROFILE_ITEMS_PER_ROUND,
     MAX_PROFILE_WINDOWS_PER_ROUND,
     SCREENING_ENTRY_MAX_QUESTIONS,
     get_classifier_labels,
 )
-from src.tools.dataset_adapter import load_hf_dataset_with_fallback, normalize_item
+from src.tools.dataset_adapter import load_cached_hf_dataset, load_hf_dataset_with_fallback, normalize_item
 from src.tools.dataset_bank import infer_module
 from src.tools.dataset_cleaner_codegen import apply_cleaner_to_rows
 from src.tools.dataset_state import DATASET_STATE_IN_USE
@@ -115,46 +116,96 @@ def _cleaner_failure_metadata(
     return metadata
 
 
-def _load_local_dataset_rows(
+def _extract_code_test(row: dict) -> tuple[str, str]:
+    """Extract test code and entry_point from a raw dataset row.
+
+    Handles HumanEval (test + entry_point), MBPP (test_list + test_setup_code),
+    and generic code datasets (test/tests/test_code + function_name).
+    """
+    # Test code
+    test = row.get("test") or row.get("tests") or row.get("test_code") or ""
+    if not test and row.get("test_list"):
+        tl = row["test_list"]
+        if isinstance(tl, list):
+            test = "\n".join(str(t) for t in tl)
+        else:
+            test = str(tl)
+        if row.get("test_setup_code"):
+            test = str(row["test_setup_code"]) + "\n" + test
+    test = str(test).strip()
+
+    # Entry point
+    entry_point = row.get("entry_point") or row.get("function_name") or ""
+    entry_point = str(entry_point).strip()
+    return test, entry_point
+
+
+# Field-name candidates for question/answer detection in code datasets.
+_CODE_QUESTION_FIELDS = ("question", "prompt", "text", "instruction", "problem", "input", "task")
+_CODE_ANSWER_FIELDS = ("answer", "canonical_solution", "code", "solution", "output", "target")
+
+
+def _detect_code_schema(row: dict) -> dict:
+    """Detect question/answer fields from a code dataset row."""
+    q_field = next((f for f in _CODE_QUESTION_FIELDS if row.get(f)), "question")
+    a_field = next((f for f in _CODE_ANSWER_FIELDS if row.get(f)), "answer")
+    return {
+        "usable": True,
+        "question_field": q_field,
+        "answer_field": a_field,
+        "rollout_gold_field": a_field,
+        "train_output_field": a_field,
+        "target_style": "answer",
+        "dedup_key_field": q_field,
+        "schema_type": "flat",
+    }
+
+
+def _load_code_dataset_rows(
     ref: dict,
     offset: int,
     limit: int,
     state: EvoState | dict | None,
 ) -> tuple[list[dict], dict]:
-    """Load a LOCAL dataset directory (code-domain smoke data) without a cleaner.
+    """Load a code dataset (local directory or HF cache) without a cleaner.
 
-    Local datasets ship question/answer/test/entry_point already in the right
-    shape, so the codegen cleaner (which assumes math rows and drops the test
-    fields) is bypassed. Rows are normalized directly and test/entry_point are
-    preserved so the test-execution judge can drive candidates.
+    Code datasets ship question/answer/test/entry_point in a known shape, so
+    the codegen cleaner (which assumes math rows and drops the test fields) is
+    bypassed.  Rows are normalized directly and test/entry_point are preserved
+    so the test-execution judge can drive candidates.
+
+    Works for:
+    - Local directories (data/code_train) via load_hf_dataset_with_fallback
+    - HF datasets (openai_humaneval, mbpp) via load_cached_hf_dataset (offline)
     """
     dataset_id = ref.get("dataset_id", "unknown")
     subset = ref.get("subset")
     split = ref.get("split") or "train"
     requested_split = ref.get("requested_split") or ref.get("source_dataset_requested_split")
-    schema = {
-        "usable": True,
-        "question_field": "question",
-        "answer_field": "answer",
-        "rollout_gold_field": "answer",
-        "train_output_field": "answer",
-        "target_style": "answer",
-        "dedup_key_field": "question",
-        "schema_type": "flat",
-    }
-    columns = ["question", "answer", "test", "entry_point"]
+
+    is_local = isinstance(dataset_id, str) and os.path.isdir(dataset_id)
     try:
-        dataset = load_hf_dataset_with_fallback(dataset_id, subset, split)
+        if is_local:
+            dataset = load_hf_dataset_with_fallback(dataset_id, subset, split)
+        else:
+            dataset = load_cached_hf_dataset(dataset_id, subset, split)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
-        print(f"[screening_entry] Failed to load local dataset {dataset_id}: {error}")
+        print(f"[screening_entry] Failed to load code dataset {dataset_id}: {error}")
         metadata = _window_metadata(ref, offset, limit, 0)
         metadata["load_error"] = error
         metadata["failure_reason"] = error
         return [], metadata
 
     rows = list(dataset)
+    if not rows:
+        metadata = _window_metadata(ref, offset, limit, 0)
+        metadata["failure_reason"] = "no_questions_loaded"
+        return [], metadata
+
     window = rows[offset:offset + limit] if limit else rows[offset:]
+    schema = _detect_code_schema(rows[0])
+    columns = list(rows[0].keys())
     questions: list[dict] = []
     round_id = int((state or {}).get("round_id", 0) or 0)
     for i, row in enumerate(window):
@@ -169,13 +220,12 @@ def _load_local_dataset_rows(
             source_dataset_requested_split=str(requested_split) if requested_split is not None else None,
             source_dataset_split_names=[str(split)] if split else [],
             source_dataset_columns=columns,
-            source_dataset_first_row=rows[0] if rows else {},
+            source_dataset_first_row=rows[0],
             source_dataset_schema=schema,
         )
         if norm is None:
             continue
-        test_code = str(row.get("test") or row.get("tests") or row.get("test_code") or "").strip()
-        entry_point = str(row.get("entry_point") or row.get("function_name") or "").strip()
+        test_code, entry_point = _extract_code_test(row)
         norm["test"] = test_code
         norm["entry_point"] = entry_point
         norm["evaluation_method"] = "code_execution"
@@ -188,11 +238,12 @@ def _load_local_dataset_rows(
         questions.append(norm)
 
     metadata = _window_metadata(ref, offset, limit, len(questions))
-    metadata["local_dataset"] = True
+    metadata["local_dataset"] = is_local
     if not questions:
         metadata["failure_reason"] = "no_questions_loaded"
+    source = "local" if is_local else "hf_cache"
     print(
-        f"[screening_entry] Loaded local dataset {offset}:{offset + len(questions)} "
+        f"[screening_entry] Loaded {source} code dataset {offset}:{offset + len(questions)} "
         f"({len(questions)} questions) from {dataset_id} (bypassed cleaner)"
     )
     return questions, metadata
@@ -204,11 +255,12 @@ def _load_dataset_from_ref(ref: dict, schema_override: dict | None = None, state
     subset = ref.get("subset")
     split = ref.get("split") or "train"
     offset, limit = _window_bounds_from_ref(ref, state)
-    # Local dataset directories (code-domain smoke data) bypass the cleaner:
-    # they already carry question/answer/test/entry_point and the cleaner would
-    # drop the test fields.
-    if isinstance(dataset_id, str) and os.path.isdir(dataset_id):
-        return _load_local_dataset_rows(ref, offset, limit, state)
+    # Code-domain datasets (local directories or HF code datasets like HumanEval
+    # / MBPP) bypass the cleaner: they already carry question/answer/test/
+    # entry_point and the cleaner would drop the test fields.
+    is_code = IS_CODE_DOMAIN or (isinstance(dataset_id, str) and os.path.isdir(dataset_id))
+    if is_code:
+        return _load_code_dataset_rows(ref, offset, limit, state)
     cleaner_cache_ref, cleaner_source = _cleaner_cache_ref_from_ref(ref)
     if not cleaner_cache_ref:
         return [], _cleaner_failure_metadata(

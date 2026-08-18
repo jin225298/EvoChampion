@@ -361,6 +361,82 @@ def load_hf_dataset_with_fallback(
             raise first_exc
 
 
+def load_cached_hf_dataset(dataset_id: str, subset: str | None, split: str):
+    """Load a dataset from the HF hub cache, working in offline mode.
+
+    For script-based datasets (e.g. openai_humaneval) that cannot be loaded
+    via ``load_dataset`` when ``HF_HUB_OFFLINE=1``, this function finds the
+    cached parquet/jsonl files and loads them directly.  Falls back to the
+    normal ``load_hf_dataset_with_fallback`` when the cache lookup fails.
+
+    The cache layout is::
+
+        $HF_HOME/hub/datasets--<id>/snapshots/<rev>/
+            <subset>/train-*.parquet      # when subset is given
+            test-*.parquet                # when no subset (root level)
+
+    Subset directory names match the HF config name (e.g. ``full`` for MBPP).
+    """
+    from datasets import load_dataset
+
+    # First try the normal path (works for non-script datasets even offline).
+    try:
+        return load_hf_dataset_with_fallback(dataset_id, subset, split, allow_hfd=False)
+    except Exception:
+        pass
+
+    # Locate the cache directory for this dataset.
+    hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
+    hub_dir = Path(hf_home) / "hub"
+    cache_name = "datasets--" + dataset_id.replace("/", "--")
+    cache_dir = hub_dir / cache_name
+    snapshots_dir = cache_dir / "snapshots"
+    if not snapshots_dir.exists():
+        raise FileNotFoundError(
+            f"Dataset {dataset_id!r} not found in HF cache at {cache_dir}"
+        )
+
+    # Pick the latest snapshot.
+    snapshot = sorted(snapshots_dir.iterdir())[-1]
+
+    # Determine search directory: subset subdirectory or snapshot root.
+    search_dir = snapshot
+    if subset and subset not in ("default", "main", ""):
+        candidate = snapshot / subset
+        if candidate.is_dir():
+            search_dir = candidate
+
+    # Look for parquet files matching the requested split, then jsonl.
+    # Use rglob to find files in nested subdirectories (e.g. HumanEval stores
+    # parquet under openai_humaneval/test/0000.parquet).
+    parquet_files = sorted(search_dir.rglob("*.parquet"))
+    jsonl_files = sorted(search_dir.rglob("*.jsonl")) + sorted(search_dir.rglob("*.jsonl.gz"))
+    json_files = sorted(search_dir.rglob("*.json"))
+
+    data_files = parquet_files or jsonl_files or json_files
+    if not data_files:
+        # Also try subdirectories that match the split name.
+        split_dir = search_dir / split
+        if split_dir.is_dir():
+            data_files = sorted(split_dir.rglob("*.parquet")) or sorted(split_dir.rglob("*.jsonl"))
+    if not data_files:
+        raise FileNotFoundError(
+            f"No parquet/jsonl files found for {dataset_id!r} (subset={subset!r}, "
+            f"split={split!r}) in {search_dir}"
+        )
+
+    # Prefer files whose name or parent directory matches the split string.
+    # HumanEval stores parquet under openai_humaneval/test/0000.parquet (parent
+    # dir = "test"); MBPP stores under full/train-*.parquet (filename = "train").
+    split_files = [f for f in data_files if split in f.name or f.parent.name == split]
+    if split_files:
+        data_files = split_files
+
+    fmt = "parquet" if data_files[0].suffix == ".parquet" else "json"
+    ds = load_dataset(fmt, data_files=[str(f) for f in data_files], split="train")
+    return ds
+
+
 def detect_schema(features: Any) -> dict[str, Any]:
     """从数据集的 features metadata 自动检测题目字段和答案字段。
 
