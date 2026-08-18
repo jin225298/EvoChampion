@@ -64,9 +64,9 @@ export TRAINING_TIMEOUT_SECONDS=1800
 # Folder name = execution folder name (13642-grotto). Never write to /home quota.
 # ============================================================================
 DATA2_BASE="${DATA2_BASE:-/data2/group_何向南/kang/13642-grotto}"
-export BASE_MODEL_NAME=Qwen/Qwen3-0.6B
-export CHAMPION_MODEL_PATH=Qwen/Qwen3-0.6B
-export AGENT_BASE_MODEL_NAME=Qwen/Qwen3-0.6B
+export BASE_MODEL_NAME="$DATA2_BASE/Qwen3-0.6B"
+export CHAMPION_MODEL_PATH="$DATA2_BASE/Qwen3-0.6B"
+export AGENT_BASE_MODEL_NAME="$DATA2_BASE/Qwen3-0.6B"
 export CANDIDATE_MODEL_DIR="${CANDIDATE_MODEL_DIR:-$DATA2_BASE/code_candidates}"
 export CANDIDATE_RETENTION_KEEP_RECENT_NON_PROMOTED=2
 mkdir -p "$CANDIDATE_MODEL_DIR"
@@ -83,11 +83,15 @@ export HF_MODULES_CACHE="$HF_HOME/modules"
 export TRANSFORMERS_CACHE="$HF_HOME/transformers"
 export XET_DISABLE=1
 export HF_HUB_ENABLE_HF_TRANSFER=0
-export HF_HUB_OFFLINE=0
-export HF_DATASETS_OFFLINE=0
-export TRANSFORMERS_OFFLINE=0
+# Offline mode: use the local cached model, no download attempts.
+export HF_HUB_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
 export PYTHONUNBUFFERED=1
 export HF_HUB_DOWNLOAD_TIMEOUT=180
+# The login node's local proxy (127.0.0.1:1081) is not reachable from compute
+# nodes; unset it so local model loads don't hang on a dead proxy.
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 
 # Search: force the local smoke dataset (predefined fallback) so the closed loop
 # trains on code_smoke/train.json without depending on the HF API. The benchmark
