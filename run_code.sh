@@ -33,7 +33,7 @@ set -u
 # ---------------------------------------------------------------------------
 export DOMAIN=code
 export ANSWER_VERIFIER_TYPE=auto
-export BENCHMARK_DATASET_ID="${PROJECT_DIR}/data/code_smoke"
+export BENCHMARK_DATASET_ID="${PROJECT_DIR}/data/humaneval"
 export BENCHMARK_SPLIT=train
 export BENCHMARK_EVAL_SPLIT=test
 export BENCHMARK_QUESTION_KEY=question
@@ -86,9 +86,11 @@ export USE_HFD_DATASET_DOWNLOAD="${USE_HFD_DATASET_DOWNLOAD:-1}"
 export SEARCH_FALLBACK_MODE=empty
 export SEARCH_DATASET_REPO_LIMIT=8
 
-# Instruction prefix for code tasks.
+# Instruction prefix for code tasks. HumanEval is completion-based (the model
+# sees the function signature and generates the body), so no instruction prefix
+# is prepended. Override with INSTRUCTION_PREFIX env var if needed.
 if [[ -z "${INSTRUCTION_PREFIX:-}" ]]; then
-  export INSTRUCTION_PREFIX='请编写满足测试的函数，只输出代码：\n\n'
+  export INSTRUCTION_PREFIX=""
 else
   export INSTRUCTION_PREFIX
 fi
