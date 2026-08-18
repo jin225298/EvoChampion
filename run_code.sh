@@ -92,7 +92,7 @@ export DATASET_REVIEW_STREAMING_TIMEOUT_SECONDS="${DATASET_REVIEW_STREAMING_TIME
 # ---------------------------------------------------------------------------
 # Training + evaluation scale
 # ---------------------------------------------------------------------------
-export MAX_ROUNDS=3
+export MAX_ROUNDS=2
 export FILTER_TARGET_QUESTIONS_PER_ROUND=64
 export SCREENING_ENTRY_MAX_QUESTIONS=64
 export DATASET_PROFILE_WINDOW_SIZE=64
